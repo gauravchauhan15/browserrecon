@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "packages/*/*"
+
+# pnpm blocks dependency build scripts by default. Each entry here is a
+# deliberate exception, reviewed once — not a blanket opt-out. Adding one is a
+# supply-chain decision, so it belongs in a diff.
+#
+#   esbuild — links its platform-native binary on install; required by Vitest.
+allowBuilds:
+  esbuild: true

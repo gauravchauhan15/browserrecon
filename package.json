@@ -1,0 +1,38 @@
+{
+  "name": "browserrecon-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser runtime recon — monorepo root",
+  "license": "Apache-2.0",
+  "author": "Gaurav Chauhan",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gauravchauhan15/browserrecon.git"
+  },
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --build --force",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "node scripts/verify.mjs",
+    "new-package": "node scripts/new-package.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  }
+}

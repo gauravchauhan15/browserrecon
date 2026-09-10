@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+*.tsbuildinfo
+coverage/
+
+# ---------------------------------------------------------------------------
+# Scan output — CONTAINS UNREDACTED CAPTURED DATA (see build plan §37.2).
+# The Event Store is deliberately raw and local-only: cookies, tokens,
+# authorization headers and request bodies land here verbatim.
+# Never commit this, and never sync it to cloud storage.
+# ---------------------------------------------------------------------------
+.output/
+*.jsonl
+!fixtures/**/*.jsonl
+!tests/**/fixtures/**/*.jsonl
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+auth-profiles/
+test-data-profiles/
+
+# Browser artifacts
+chrome-profile/
+chrome-user-data/
+.chromium/
+screenshots/
+
+# Local model / cache artifacts
+*.gguf
+.analysis-cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
