@@ -43,3 +43,16 @@ export type {
 
 export { POLICY_SPEC, defaultTargetPolicy, resolveTargetPolicy } from "./resolve.js";
 export type { PolicyResolution, PolicyViolation, ResolvePolicyInput } from "./resolve.js";
+
+export { DENIAL_REASONS, PERMITTED_ACTIONS, PolicyEngine } from "./engine.js";
+export type {
+  Allowed,
+  BarrierCategory,
+  Decision,
+  Denied,
+  DenialReason,
+  ProposedAction,
+} from "./engine.js";
+
+export { classifyAddress, isIpLiteral, isPubliclyRoutable } from "./ip.js";
+export type { AddressClass } from "./ip.js";
