@@ -1,0 +1,141 @@
+name: CI
+
+# SECURITY: `pull_request`, never `pull_request_target`.
+#
+# `pull_request_target` runs with repository secrets in the context of the
+# fork's code, which is the specific footgun that leaks secrets to untrusted
+# pull requests. This workflow needs no secrets, so it must never be changed
+# to that trigger — a PR doing so should be rejected on sight
+# (dev plan BR-M0-02, BR-M7-05 review checklist step 3).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege by default; jobs opt in to more only where required.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Reproducibility over convenience: CI must not silently drift to a newer
+  # toolchain than the one a change was verified against.
+  FORCE_COLOR: "1"
+
+jobs:
+  verify:
+    name: verify (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22 is the version the plan targets; 24 catches forward breakage
+        # early rather than at an upgrade deadline.
+        node: ["22", "24"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      - run: pnpm run format:check
+      - run: pnpm run test
+      - run: pnpm run build
+
+  secrets:
+    name: secret scan (full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history, not a shallow clone: making the repository public
+          # exposes every commit ever made, so a secret in an old commit is
+          # just as damaging as one in HEAD.
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  licenses:
+    name: license allowlist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable corepack
+        run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check dependency licenses
+        run: node scripts/check-licenses.mjs
+
+  clean-install:
+    name: clean install (fresh machine)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable corepack
+        run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Deliberately NOT cached, and deliberately not using the dev machine's
+      # state: this job answers "does it work for someone who is not the
+      # author?", which is the one question a developer's laptop can never
+      # answer honestly, because it already has every dependency installed.
+      - name: Install from lockfile on a bare runner
+        run: pnpm install --frozen-lockfile
+
+      - name: Build from clean
+        run: pnpm run build
+
+      - name: Tests pass on a machine that has never run them
+        run: pnpm run test
+
+      # Scope note: this job currently proves install + build + test on a bare
+      # runner. It is extended to install the packed CLI and run a real scan
+      # against a fixture once the CLI has commands (BR-M0-11) and the fixture
+      # harness exists (BR-M0-13). Extending it is part of BR-M1-31's gate.
+      - name: Packable
+        run: pnpm --filter @browserrecon/cli pack --pack-destination /tmp
+
+  dependency-review:
+    name: dependency review
+    # PR-only: the action compares a PR's dependency changes against the base
+    # branch, so there is nothing to diff on a direct push.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Review added or changed dependencies
+        uses: actions/dependency-review-action@v4
+        with:
+          # The most common supply-chain vector is a small, useful-looking new
+          # package, so any dependency change gets surfaced for explicit
+          # attention rather than reviewed only if someone notices it.
+          comment-summary-in-pr: on-failure
+          fail-on-severity: low
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, Unlicense, CC0-1.0

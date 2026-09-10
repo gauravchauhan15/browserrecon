@@ -28,6 +28,12 @@ const steps = [
   { name: "format", cmd: bin("prettier"), args: ["--check", "."], required: true },
   { name: "test", cmd: bin("vitest"), args: ["run"], required: true },
   {
+    name: "licenses",
+    cmd: process.execPath,
+    args: ["scripts/check-licenses.mjs"],
+    required: true,
+  },
+  {
     name: "secret scan",
     cmd: "gitleaks",
     args: ["detect", "--no-banner", "--redact", "--log-opts=--all"],
