@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gauravchauhan15/browserrecon/schemas/events/event-envelope.schema.json",
+  "title": "BrowserRecon event envelope",
+  "description": "Common envelope carried by every BrowserRecon observation (build plan §13.2). Ordering authority is `sequence`, not `timestamp`.",
+  "x-schema-version": "1.0.0",
+  "type": "object",
+  "required": [
+    "event_id",
+    "session_id",
+    "timestamp",
+    "sequence",
+    "type",
+    "provenance",
+    "auth_context",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt_\\d{6,}$",
+      "description": "Deterministic, monotonic per session. Never a random UUID."
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^sess_\\d{4,}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC. Informational — use `sequence` for ordering."
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Strictly increasing and gapless within a session."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "scan_started",
+        "scan_finished",
+        "browser_started",
+        "browser_stopped",
+        "page_loaded",
+        "navigation_started",
+        "navigation_committed",
+        "soft_navigation",
+        "interaction",
+        "network_request",
+        "network_response",
+        "network_failed",
+        "console_message",
+        "js_execution_context",
+        "storage_observation",
+        "cookie_observation",
+        "discovery_imported",
+        "template_saturated",
+        "template_divergence",
+        "js_analysis_completed",
+        "js_analysis_failed",
+        "coverage_gap_identified",
+        "liveness_probe_result",
+        "auth_state_changed",
+        "webmcp_tool_discovered",
+        "webmcp_tool_invoked",
+        "webmcp_tool_result",
+        "screenshot_captured",
+        "dom_snapshot",
+        "state_change",
+        "workflow_started",
+        "workflow_updated",
+        "workflow_finished",
+        "agent_decision",
+        "agent_action",
+        "access_barrier",
+        "rate_limit",
+        "human_assist_requested",
+        "human_assist_completed",
+        "error"
+      ],
+      "description": "Build plan §13.1. Authoritative list."
+    },
+    "provenance": {
+      "type": "string",
+      "enum": [
+        "observed",
+        "imported",
+        "correlated",
+        "derived",
+        "inferred",
+        "static_context_inferred",
+        "hypothesis"
+      ],
+      "description": "Build plan §24. `static_context_inferred` sits outside the main chain and is always weaker than `inferred`."
+    },
+    "auth_context": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Auth profile active when captured, or \"anonymous\" (§12.3). Required so coverage can distinguish a public route from one seen while logged out."
+    },
+    "page_id": {
+      "type": "string",
+      "pattern": "^page_\\d{4,}$"
+    },
+    "navigation_id": {
+      "type": "string",
+      "pattern": "^nav_\\d{4,}$"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^wf_\\d{4,}$",
+      "description": "Assigned after correlation, so usually absent at capture time."
+    },
+    "payload": {
+      "description": "Type-specific body. Required even when empty."
+    }
+  }
+}

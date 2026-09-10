@@ -57,6 +57,12 @@ jobs:
       - run: pnpm run test
       - run: pnpm run build
 
+      # The committed JSON Schemas are a published contract (build plan §23).
+      # Regenerating and comparing means a change to the TypeScript
+      # definitions cannot silently diverge from what consumers read.
+      - name: Schemas match their TypeScript source
+        run: pnpm run schemas:check
+
   secrets:
     name: secret scan (full history)
     runs-on: ubuntu-latest

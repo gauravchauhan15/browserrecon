@@ -25,7 +25,9 @@
     "test:watch": "vitest",
     "verify": "node scripts/verify.mjs",
     "new-package": "node scripts/new-package.mjs",
-    "check:licenses": "node scripts/check-licenses.mjs"
+    "check:licenses": "node scripts/check-licenses.mjs",
+    "schemas": "node scripts/generate-schemas.mjs",
+    "schemas:check": "node scripts/generate-schemas.mjs --check"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

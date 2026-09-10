@@ -34,6 +34,15 @@ const steps = [
     required: true,
   },
   {
+    // Runs after typecheck, which builds the dist/ this reads. The committed
+    // schemas are a published contract (§23), so drift from the TypeScript
+    // definitions must fail here rather than reach a downstream consumer.
+    name: "schemas",
+    cmd: process.execPath,
+    args: ["scripts/generate-schemas.mjs", "--check"],
+    required: true,
+  },
+  {
     name: "secret scan",
     cmd: "gitleaks",
     args: ["detect", "--no-banner", "--redact", "--log-opts=--all"],

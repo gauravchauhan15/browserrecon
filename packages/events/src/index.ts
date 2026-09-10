@@ -7,3 +7,26 @@
 
 /** Package identity, used by diagnostics and the `doctor` command. */
 export const PACKAGE_NAME = "@browserrecon/events" as const;
+
+export { EVENT_TYPES, isEventType } from "./event-types.js";
+export type { EventType } from "./event-types.js";
+
+export {
+  PROVENANCE,
+  isFactual,
+  isModelDerived,
+  isProvenance,
+  isRuntimeGrounded,
+} from "./provenance.js";
+export type { Provenance } from "./provenance.js";
+
+export { createEnvelope, validateEnvelope } from "./envelope.js";
+export type {
+  AuthContext,
+  CreateEnvelopeInput,
+  EnvelopeValidation,
+  EnvelopeViolation,
+  EventEnvelope,
+} from "./envelope.js";
+
+export { EVENT_SCHEMA_VERSION, buildEventEnvelopeSchema } from "./schema.js";

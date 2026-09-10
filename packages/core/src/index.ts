@@ -7,3 +7,6 @@
 
 /** Package identity, used by diagnostics and the `doctor` command. */
 export const PACKAGE_NAME = "@browserrecon/core" as const;
+
+export { ID_KINDS, IdFactory, idKindOf, isId } from "./ids.js";
+export type { Id, IdKind } from "./ids.js";
