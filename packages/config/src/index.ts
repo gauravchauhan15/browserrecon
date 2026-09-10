@@ -7,3 +7,28 @@
 
 /** Package identity, used by diagnostics and the `doctor` command. */
 export const PACKAGE_NAME = "@browserrecon/config" as const;
+
+export { formatConfigErrors, loadConfig, parseConfigFile } from "./load.js";
+export type { ConfigError, ConfigResult, LoadConfigInput, ResolvedValue } from "./load.js";
+
+export { bool, list, num, oneOf, str, VALUE_SOURCES } from "./spec.js";
+export type {
+  BooleanField,
+  ConfigSpec,
+  EnumField,
+  FieldSpec,
+  ListField,
+  NumberField,
+  StringField,
+  ValueSource,
+} from "./spec.js";
+
+export {
+  CONFIG_SPEC,
+  LOG_LEVELS,
+  MODEL_TIERS,
+  OUTPUT_FORMATS,
+  RATE_PROFILES,
+  THOROUGHNESS_LEVELS,
+  renderDefaultsTable,
+} from "./schema.js";

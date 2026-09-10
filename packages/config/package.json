@@ -18,6 +18,7 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@browserrecon/core": "workspace:*"
+    "@browserrecon/core": "workspace:*",
+    "yaml": "^2.9.0"
   }
 }
