@@ -61,6 +61,16 @@ export type EnvelopeValidation =
   | { readonly ok: true; readonly envelope: EventEnvelope }
   | { readonly ok: false; readonly violations: readonly EnvelopeViolation[] };
 
+/**
+ * Input to `createEnvelope`.
+ *
+ * The optional fields accept an explicit `undefined` — unlike the envelope
+ * itself, where the key is absent entirely. That asymmetry is deliberate: a
+ * caller forwarding `page_id` it may not have should not need a conditional
+ * spread at every call site, while a *built* envelope must never carry a key
+ * whose value is undefined, since that would serialize as a claim the event
+ * had no page rather than no page context.
+ */
 export interface CreateEnvelopeInput<TPayload> {
   readonly event_id: string;
   readonly session_id: string;
@@ -69,10 +79,10 @@ export interface CreateEnvelopeInput<TPayload> {
   readonly provenance: Provenance;
   readonly auth_context: AuthContext;
   readonly payload: TPayload;
-  readonly timestamp?: string;
-  readonly page_id?: string;
-  readonly navigation_id?: string;
-  readonly workflow_id?: string;
+  readonly timestamp?: string | undefined;
+  readonly page_id?: string | undefined;
+  readonly navigation_id?: string | undefined;
+  readonly workflow_id?: string | undefined;
 }
 
 /**

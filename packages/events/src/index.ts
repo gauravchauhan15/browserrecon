@@ -30,3 +30,14 @@ export type {
 } from "./envelope.js";
 
 export { EVENT_SCHEMA_VERSION, buildEventEnvelopeSchema } from "./schema.js";
+
+export { CriticalSubscriberError, EventBus, EventBusOverflowError } from "./bus.js";
+export type {
+  EventBusOptions,
+  EventBusStats,
+  EventHandler,
+  PublishInput,
+  SubscribeOptions,
+  SubscriberFailure,
+  Unsubscribe,
+} from "./bus.js";
