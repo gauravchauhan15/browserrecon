@@ -6,6 +6,9 @@
       "path": "./apps/cli"
     },
     {
+      "path": "./packages/authorization"
+    },
+    {
       "path": "./packages/config"
     },
     {

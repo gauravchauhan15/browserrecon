@@ -143,6 +143,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/policy
 
+  packages/authorization:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../core
+      '@browserrecon/policy':
+        specifier: workspace:*
+        version: link:../policy
+
   packages/config:
     dependencies:
       '@browserrecon/core':
