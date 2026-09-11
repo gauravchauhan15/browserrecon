@@ -10,3 +10,17 @@ export const PACKAGE_NAME = "@browserrecon/core" as const;
 
 export { ID_KINDS, IdFactory, idKindOf, isId } from "./ids.js";
 export type { Id, IdKind } from "./ids.js";
+
+export { LOG_LEVELS, createLogger, silentLogger } from "./logger.js";
+export type {
+  LogFields,
+  LogFormat,
+  LogLevel,
+  LogRecord,
+  LogSink,
+  Logger,
+  LoggerOptions,
+} from "./logger.js";
+
+export { REDACTED, Redactor, createRedactor } from "./redaction.js";
+export type { RedactorOptions } from "./redaction.js";
