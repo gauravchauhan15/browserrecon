@@ -20,6 +20,7 @@ import { EVENT_SCHEMA_VERSION, buildEventEnvelopeSchema } from "@browserrecon/ev
 import { CliError, EXIT_CODES, EXIT_CODE_DESCRIPTIONS } from "./exit-codes.js";
 import { addSpecOptions } from "./options.js";
 import { configValidate } from "./commands/config.js";
+import { doctor } from "./commands/doctor.js";
 
 /** Injected so tests capture output instead of writing to the terminal. */
 export interface ProgramIo {
@@ -35,7 +36,6 @@ const NOT_YET: Readonly<Record<string, string>> = {
   agent: "AI-guided exploration arrives after the deterministic scan works",
   resume: "resuming needs a scan to resume from",
   export: "exporting needs collected sessions to export",
-  doctor: "dependency checks are next",
   "auth list": "authentication profiles are not implemented yet",
   "auth validate": "authentication profiles are not implemented yet",
 };
@@ -123,7 +123,13 @@ export function buildProgram(io: ProgramIo, argv: readonly string[] = []): Comma
   program
     .command("doctor")
     .description("check Chrome, crawler and local AI availability")
-    .action(() => notImplemented("doctor"));
+    .action(async () => {
+      await doctor({
+        env: io.env,
+        configFile: program.opts().config as string | undefined,
+        write: io.out,
+      });
+    });
 
   const auth = program.command("auth").description("manage authentication profiles");
   auth

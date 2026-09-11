@@ -69,9 +69,6 @@ describe("unimplemented commands", () => {
     ["agent", ["agent", "https://shop.example.com"]],
     ["resume", ["resume", "sess_0001"]],
     ["export", ["export", "sess_0001"]],
-    // doctor takes no arguments; passing one would test argument validation
-    // rather than the not-implemented path.
-    ["doctor", ["doctor"]],
   ] as const)("%s fails clearly rather than doing nothing", async (_name, argv) => {
     // A pre-release build that accepts `scan` and silently does nothing reads
     // as broken, not unfinished.
@@ -254,6 +251,38 @@ describe("config validate", () => {
     // The common path must stay quiet, or users learn to ignore the warning.
     const { out } = await invoke(["config", "validate", "https://shop.example.com"]);
     expect(out).not.toContain("higher-risk");
+  });
+});
+
+describe("doctor", () => {
+  it("reports every dependency on the real machine", async () => {
+    // The end-to-end path, so a wiring mistake between commander and the
+    // checks cannot hide behind unit tests that inject their own probes.
+    // What this machine happens to have installed is covered in doctor.test.ts,
+    // where the probes are controlled.
+    const { out } = await invoke(["doctor"]);
+    for (const name of ["Node.js", "Chrome", "Disk space", "Katana"]) {
+      expect(out, `missing ${name}`).toContain(name);
+    }
+  });
+
+  it("exits zero, or with the dependency code when something is blocking", async () => {
+    const { out, code } = await invoke(["doctor"]);
+    if (code === EXIT_CODES.success) {
+      expect(out).toContain("Ready to scan");
+    } else {
+      // The only legitimate failure. Anything else — a crash, a usage error —
+      // means the command is broken rather than the machine.
+      expect(code).toBe(EXIT_CODES.dependency);
+      expect(out).toContain("!!");
+    }
+  });
+
+  it("writes the report to stdout even when it fails", async () => {
+    // A diagnostic that prints nothing on failure is useless; the whole point
+    // is seeing the other checks alongside the one that blocked.
+    const { out } = await invoke(["doctor"]);
+    expect(out).toContain("BrowserRecon environment check");
   });
 });
 
