@@ -90,6 +90,10 @@ corepack pnpm verify      # typecheck + lint + format + test + secret scan
 Requires Node >= 22. `pnpm` is pinned via `packageManager` and provided by
 corepack, so no global install is needed.
 
+Why the architecture looks the way it does — and what has been deliberately
+ruled out — is recorded in
+[docs/architecture/decisions.md](docs/architecture/decisions.md).
+
 ## Contributing
 
 Issues, bug reports and ideas are very welcome. **Pull requests are currently
