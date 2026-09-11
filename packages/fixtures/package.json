@@ -1,0 +1,23 @@
+{
+  "name": "@browserrecon/fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Deterministic local fixture applications for tests — no clocks, no randomness, no egress",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@browserrecon/test-utils": "workspace:*"
+  }
+}

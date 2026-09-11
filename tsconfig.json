@@ -21,6 +21,9 @@
       "path": "./packages/events"
     },
     {
+      "path": "./packages/fixtures"
+    },
+    {
       "path": "./packages/policy"
     },
     {
