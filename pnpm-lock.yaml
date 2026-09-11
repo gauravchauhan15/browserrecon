@@ -201,6 +201,21 @@ importers:
 
   packages/test-utils: {}
 
+  tests/golden:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@browserrecon/event-store':
+        specifier: workspace:*
+        version: link:../../packages/event-store
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@browserrecon/fixtures':
+        specifier: workspace:*
+        version: link:../../packages/fixtures
+
 packages:
 
   '@ampproject/remapping@2.3.0':

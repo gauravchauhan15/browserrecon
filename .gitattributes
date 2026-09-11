@@ -1,0 +1,9 @@
+# Golden baselines are compared byte for byte against freshly generated text,
+# which always uses LF. A checkout that converted them to CRLF — the Windows
+# default — would fail every golden test with a diff showing two apparently
+# identical lines, which is a miserable thing to debug.
+*.golden.txt text eol=lf
+
+# Same reasoning, one level up: the event log is a byte-oriented durable file
+# and its fixtures are compared exactly.
+*.jsonl text eol=lf

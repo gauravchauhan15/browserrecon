@@ -1,0 +1,86 @@
+# Golden baseline. Regenerate with: pnpm test:golden:update
+#
+# Masked below. A change in these counts is a change in how much this
+# baseline is NOT asserting, and is as reviewable as a change in content.
+#   loopback-origin: 28
+#   timestamp: 29
+===== events-0001.jsonl =====
+{"auth_context":"anonymous","event_id":"evt_000001","payload":{"method":"GET","url":"<fixture-origin>/"},"provenance":"observed","sequence":1,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000002","payload":{"bytes":317,"contentType":"text/html; charset=utf-8","status":200,"url":"<fixture-origin>/"},"provenance":"observed","sequence":2,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000003","payload":{"method":"GET","url":"<fixture-origin>/about"},"provenance":"observed","sequence":3,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000004","payload":{"bytes":183,"contentType":"text/html; charset=utf-8","status":200,"url":"<fixture-origin>/about"},"provenance":"observed","sequence":4,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000005","payload":{"method":"GET","url":"<fixture-origin>/products"},"provenance":"observed","sequence":5,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000006","payload":{"bytes":349,"contentType":"text/html; charset=utf-8","status":200,"url":"<fixture-origin>/products"},"provenance":"observed","sequence":6,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000007","payload":{"method":"GET","url":"<fixture-origin>/products/1"},"provenance":"observed","sequence":7,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+===== events-0002.jsonl =====
+{"auth_context":"anonymous","event_id":"evt_000008","payload":{"bytes":198,"contentType":"text/html; charset=utf-8","status":200,"url":"<fixture-origin>/products/1"},"provenance":"observed","sequence":8,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000009","payload":{"method":"GET","url":"<fixture-origin>/products/2"},"provenance":"observed","sequence":9,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000010","payload":{"bytes":197,"contentType":"text/html; charset=utf-8","status":200,"url":"<fixture-origin>/products/2"},"provenance":"observed","sequence":10,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000011","payload":{"method":"GET","url":"<fixture-origin>/products/3"},"provenance":"observed","sequence":11,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000012","payload":{"bytes":201,"contentType":"text/html; charset=utf-8","status":200,"url":"<fixture-origin>/products/3"},"provenance":"observed","sequence":12,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000013","payload":{"method":"GET","url":"<fixture-origin>/products/9"},"provenance":"observed","sequence":13,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000014","payload":{"bytes":327,"contentType":"text/html; charset=utf-8","status":200,"url":"<fixture-origin>/products/9"},"provenance":"observed","sequence":14,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+===== events-0003.jsonl =====
+{"auth_context":"anonymous","event_id":"evt_000015","payload":{"method":"GET","url":"<fixture-origin>/contact"},"provenance":"observed","sequence":15,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000016","payload":{"bytes":297,"contentType":"text/html; charset=utf-8","status":200,"url":"<fixture-origin>/contact"},"provenance":"observed","sequence":16,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000017","payload":{"method":"GET","url":"<fixture-origin>/app.js"},"provenance":"observed","sequence":17,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000018","payload":{"bytes":304,"contentType":"text/javascript; charset=utf-8","status":200,"url":"<fixture-origin>/app.js"},"provenance":"observed","sequence":18,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000019","payload":{"method":"GET","url":"<fixture-origin>/robots.txt"},"provenance":"observed","sequence":19,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000020","payload":{"bytes":68,"contentType":"text/plain; charset=utf-8","status":200,"url":"<fixture-origin>/robots.txt"},"provenance":"observed","sequence":20,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000021","payload":{"method":"GET","url":"<fixture-origin>/sitemap.xml"},"provenance":"observed","sequence":21,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+===== events-0004.jsonl =====
+{"auth_context":"anonymous","event_id":"evt_000022","payload":{"bytes":233,"contentType":"application/xml; charset=utf-8","status":200,"url":"<fixture-origin>/sitemap.xml"},"provenance":"observed","sequence":22,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000023","payload":{"method":"GET","url":"<fixture-origin>/orphan"},"provenance":"observed","sequence":23,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000024","payload":{"bytes":168,"contentType":"text/html; charset=utf-8","status":200,"url":"<fixture-origin>/orphan"},"provenance":"observed","sequence":24,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000025","payload":{"method":"GET","url":"<fixture-origin>/gone"},"provenance":"observed","sequence":25,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000026","payload":{"bytes":5,"contentType":"text/plain; charset=utf-8","status":410,"url":"<fixture-origin>/gone"},"provenance":"observed","sequence":26,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+{"auth_context":"anonymous","event_id":"evt_000027","payload":{"method":"GET","url":"<fixture-origin>/nowhere"},"provenance":"observed","sequence":27,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_request"}
+{"auth_context":"anonymous","event_id":"evt_000028","payload":{"bytes":10,"contentType":"text/plain; charset=utf-8","status":404,"url":"<fixture-origin>/nowhere"},"provenance":"observed","sequence":28,"session_id":"sess_0001","timestamp":"<timestamp>","type":"network_response"}
+===== segments.json =====
+{
+  "segments": [
+    {
+      "bytes": 1858,
+      "events": 7,
+      "filename": "events-0001.jsonl",
+      "firstSequence": 1,
+      "lastSequence": 7,
+      "ordinal": 1
+    },
+    {
+      "bytes": 1949,
+      "events": 7,
+      "filename": "events-0002.jsonl",
+      "firstSequence": 8,
+      "lastSequence": 14,
+      "ordinal": 2
+    },
+    {
+      "bytes": 1892,
+      "events": 7,
+      "filename": "events-0003.jsonl",
+      "firstSequence": 15,
+      "lastSequence": 21,
+      "ordinal": 3
+    },
+    {
+      "bytes": 1931,
+      "events": 7,
+      "filename": "events-0004.jsonl",
+      "firstSequence": 22,
+      "lastSequence": 28,
+      "ordinal": 4
+    }
+  ],
+  "sessionId": "sess_0001",
+  "version": 1
+}
+===== checkpoint.json =====
+{
+  "at": "<timestamp>",
+  "durableSequence": 28,
+  "segments": 4,
+  "sessionId": "sess_0001",
+  "version": 1,
+  "writtenSequence": 28
+}

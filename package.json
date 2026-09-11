@@ -23,6 +23,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:golden": "tsc --build && vitest run tests/golden",
+    "test:golden:update": "node scripts/update-golden.mjs",
     "verify": "node scripts/verify.mjs",
     "new-package": "node scripts/new-package.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",

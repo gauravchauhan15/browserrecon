@@ -2,6 +2,9 @@ packages:
   - "apps/*"
   - "packages/*"
   - "packages/*/*"
+  # Test suites that are packages in their own right because they have
+  # dependencies and are imported by later stories, not just run.
+  - "tests/*"
 
 # pnpm blocks dependency build scripts by default. Each entry here is a
 # deliberate exception, reviewed once — not a blanket opt-out. Adding one is a

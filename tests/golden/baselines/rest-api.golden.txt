@@ -1,0 +1,49 @@
+# Golden baseline. Regenerate with: pnpm test:golden:update
+#
+# Masked below. A change in these counts is a change in how much this
+# baseline is NOT asserting, and is as reviewable as a change in content.
+#   (nothing masked)
+===== GET /api/v1/products (200) =====
+{
+  "items": [
+    {
+      "id": "1",
+      "name": "Blue widget",
+      "price": 9.99
+    },
+    {
+      "id": "2",
+      "name": "Red widget",
+      "price": 12.5
+    },
+    {
+      "id": "3",
+      "name": "Green widget",
+      "price": 11
+    }
+  ],
+  "total": 3
+}
+===== GET /api/v1/products/2 (200) =====
+{
+  "id": "2",
+  "name": "Red widget",
+  "price": 12.5
+}
+===== GET /api/v1/products/99 (404) =====
+{
+  "error": "no_such_product"
+}
+===== GET /api/v1/cart (200) =====
+{
+  "items": [],
+  "total": 0
+}
+===== GET /api/v1/admin/users (401) =====
+{
+  "error": "unauthorized"
+}
+===== GET /api/v1/nope (404) =====
+{
+  "error": "not_found"
+}

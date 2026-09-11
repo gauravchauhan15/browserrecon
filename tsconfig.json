@@ -28,6 +28,9 @@
     },
     {
       "path": "./packages/test-utils"
+    },
+    {
+      "path": "./tests/golden"
     }
   ]
 }

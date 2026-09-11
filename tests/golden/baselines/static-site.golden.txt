@@ -1,0 +1,131 @@
+# Golden baseline. Regenerate with: pnpm test:golden:update
+#
+# Masked below. A change in these counts is a change in how much this
+# baseline is NOT asserting, and is as reviewable as a change in content.
+#   (nothing masked)
+===== / (200 text/html; charset=utf-8) =====
+<!doctype html>
+<html lang="en">
+<head>
+<title>Widget Co</title>
+<script src="/app.js"></script>
+</head>
+<body>
+<h1>Widget Co</h1>
+<nav>
+<a href="/about">About</a>
+<a href="/products">Products</a>
+<a href="/contact">Contact</a>
+<a href="/gone">Discontinued</a>
+<a href="/old-home">Old home</a>
+</nav>
+</body>
+</html>
+===== /about (200 text/html; charset=utf-8) =====
+<!doctype html>
+<html lang="en">
+<head>
+<title>About</title>
+<script src="/app.js"></script>
+</head>
+<body>
+<h1>About</h1>
+<p>We make widgets.</p><a href="/">Home</a>
+</body>
+</html>
+===== /products (200 text/html; charset=utf-8) =====
+<!doctype html>
+<html lang="en">
+<head>
+<title>Products</title>
+<script src="/app.js"></script>
+</head>
+<body>
+<h1>Products</h1>
+<ul>
+<li><a href="/products/1">Blue widget</a></li>
+<li><a href="/products/2">Red widget</a></li>
+<li><a href="/products/3">Green widget</a></li>
+<li><a href="/products/9">Prototype widget</a></li>
+</ul>
+</body>
+</html>
+===== /products/1 (200 text/html; charset=utf-8) =====
+<!doctype html>
+<html lang="en">
+<head>
+<title>Blue widget</title>
+<script src="/app.js"></script>
+</head>
+<body>
+<h1>Blue widget</h1>
+<p>Price: 9.99</p><a href="/products">Back</a>
+</body>
+</html>
+===== /products/9 (200 text/html; charset=utf-8) =====
+<!doctype html>
+<html lang="en">
+<head>
+<title>Prototype widget</title>
+<script src="/app.js"></script>
+</head>
+<body>
+<h1>Prototype widget</h1>
+<p>Internal prototype.</p>
+<form method="post" action="/admin/approve">
+<input type="hidden" name="product" value="9">
+<button type="submit">Approve</button>
+</form>
+</body>
+</html>
+===== /contact (200 text/html; charset=utf-8) =====
+<!doctype html>
+<html lang="en">
+<head>
+<title>Contact</title>
+<script src="/app.js"></script>
+</head>
+<body>
+<h1>Contact</h1>
+<form method="post" action="/contact">
+<input name="email" type="email">
+<textarea name="message"></textarea>
+<button type="submit">Send</button>
+</form>
+</body>
+</html>
+===== /app.js (200 text/javascript; charset=utf-8) =====
+// Widget Co front-end
+const API_BASE = "/api/v1";
+export async function loadCart() {
+  return fetch(API_BASE + "/cart").then((r) => r.json());
+}
+export async function trackEvent(name) {
+  return fetch("/api/v1/telemetry", { method: "POST", body: name });
+}
+const ADMIN_ENDPOINT = "/api/v1/admin/users";
+===== /robots.txt (200 text/plain; charset=utf-8) =====
+User-agent: *
+Crawl-delay: 1
+Disallow: /admin
+Sitemap: /sitemap.xml
+===== /sitemap.xml (200 application/xml; charset=utf-8) =====
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>/</loc></url>
+  <url><loc>/about</loc></url>
+  <url><loc>/products</loc></url>
+  <url><loc>/orphan</loc></url>
+</urlset>
+===== /orphan (200 text/html; charset=utf-8) =====
+<!doctype html>
+<html lang="en">
+<head>
+<title>Orphan</title>
+<script src="/app.js"></script>
+</head>
+<body>
+<h1>Orphan</h1>
+<p>Nothing links here.</p>
+</body>
+</html>

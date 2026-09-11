@@ -1,0 +1,26 @@
+{
+  "name": "@browserrecon/golden",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Golden-output normalization, baselines and the deliberate update flow",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@browserrecon/core": "workspace:*",
+    "@browserrecon/event-store": "workspace:*",
+    "@browserrecon/events": "workspace:*",
+    "@browserrecon/fixtures": "workspace:*"
+  }
+}
