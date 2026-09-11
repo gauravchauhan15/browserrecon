@@ -13,18 +13,19 @@ dependency surface.
 
 Attribution required. Verified at the pinned versions.
 
-| Component       | License    | Role                                     |
-| --------------- | ---------- | ---------------------------------------- |
-| yaml (`yaml@2`) | ISC        | Runtime — parses YAML config (§7.2, §11) |
-| TypeScript      | Apache-2.0 | Build toolchain                          |
-| ESLint          | MIT        | Lint toolchain                           |
-| Prettier        | MIT        | Format toolchain                         |
-| Vitest          | MIT        | Test runner                              |
+| Component                  | License    | Role                                     |
+| -------------------------- | ---------- | ---------------------------------------- |
+| yaml (`yaml@2`)            | ISC        | Runtime — parses YAML config (§7.2, §11) |
+| commander (`commander@15`) | MIT        | Runtime — CLI argument parsing (§30)     |
+| TypeScript                 | Apache-2.0 | Build toolchain                          |
+| ESLint                     | MIT        | Lint toolchain                           |
+| Prettier                   | MIT        | Format toolchain                         |
+| Vitest                     | MIT        | Test runner                              |
 
 _Runtime dependencies are added to this table by the story that introduces
-them. Expected additions per the build plan: Puppeteer (Apache-2.0),
-tree-sitter and tree-sitter-javascript (MIT), commander (MIT), and — from V5 —
-chrome-devtools-mcp (Apache-2.0)._
+them. Still expected per the build plan: Puppeteer (Apache-2.0), tree-sitter
+and tree-sitter-javascript (MIT), and — from V5 — chrome-devtools-mcp
+(Apache-2.0)._
 
 ## Invoked — external, user-installed, never bundled
 
