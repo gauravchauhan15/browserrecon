@@ -35,6 +35,16 @@ export type {
 
 export type { PageDomainOptions } from "./page-domain.js";
 
+export { WS_OPCODE_NAMES } from "./realtime-types.js";
+export type {
+  EventSourceMessagePayload,
+  FrameDirection,
+  WebSocketClosedPayload,
+  WebSocketCreatedPayload,
+  WebSocketFramePayload,
+  WebSocketOpenedPayload,
+} from "./realtime-types.js";
+
 export type {
   ExecutionContextPayload,
   FrameRef,

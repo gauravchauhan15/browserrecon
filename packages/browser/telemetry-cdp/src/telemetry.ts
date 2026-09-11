@@ -32,6 +32,7 @@ import type { EventBus, EventType } from "@browserrecon/events";
 import { DEFAULT_BODY_LIMITS, type BodyCaptureLimits } from "./body-policy.js";
 import { newCounters, type EventIds, type TelemetryContext } from "./context.js";
 import { resetNetworkState, wireNetworkDomain } from "./network-domain.js";
+import { wireRealtimeDomain } from "./realtime-domain.js";
 import {
   enablePageDomains,
   newPageDomainState,
@@ -146,6 +147,9 @@ export async function attachTelemetry(options: TelemetryOptions): Promise<Teleme
 
           if (options.network !== false) {
             wireNetworkDomain(child, event.targetInfo.targetId, ctx);
+            // WebSocket and EventSource events arrive on the Network domain
+            // too, so they cost nothing extra to subscribe to.
+            wireRealtimeDomain(child, event.targetInfo.targetId, ctx);
             await child.send("Network.enable");
           }
           if (options.pageAndRuntime !== false) {
@@ -193,6 +197,9 @@ export async function attachTelemetry(options: TelemetryOptions): Promise<Teleme
         frames: pageState.frames.size,
         liveExecutionContexts: pageState.contexts.size,
         scripts: counters.scripts,
+        webSockets: counters.webSockets,
+        webSocketFrames: counters.webSocketFrames,
+        eventSourceMessages: counters.eventSourceMessages,
         attachedTargets: sessions.size,
       };
     },

@@ -157,3 +157,47 @@ export interface ScriptParsed {
   readonly sourceMapURL?: string;
   readonly isModule?: boolean;
 }
+
+// --- WebSocket and EventSource --------------------------------------------
+
+export interface WebSocketCreated {
+  readonly requestId: string;
+  readonly url: string;
+  readonly initiator?: CdpInitiator;
+}
+
+export interface WebSocketHandshakeResponse {
+  readonly requestId: string;
+  readonly response: {
+    readonly status: number;
+    readonly statusText?: string;
+    readonly headers?: CdpHeaders;
+    readonly requestHeaders?: CdpHeaders;
+  };
+}
+
+export interface WebSocketFrame {
+  readonly requestId: string;
+  readonly response: {
+    /** RFC 6455 opcode. 0x9 ping and 0xa pong are the protocol keepalives. */
+    readonly opcode: number;
+    readonly mask?: boolean;
+    readonly payloadData: string;
+  };
+}
+
+export interface WebSocketClosed {
+  readonly requestId: string;
+}
+
+export interface WebSocketError {
+  readonly requestId: string;
+  readonly errorMessage: string;
+}
+
+export interface EventSourceMessage {
+  readonly requestId: string;
+  readonly eventName?: string;
+  readonly eventId?: string;
+  readonly data: string;
+}

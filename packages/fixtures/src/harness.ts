@@ -37,6 +37,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { serveWebSocket } from "./websocket.js";
 import type {
   FixtureApp,
   FixtureRequest,
@@ -154,9 +155,25 @@ function route(
 }
 
 function send(response: ServerResponse, result: FixtureResponse): void {
-  const body = Buffer.from(result.body ?? "", "utf8");
   const headers: Record<string, string> = { ...(result.headers ?? {}) };
 
+  if (result.stream !== undefined) {
+    // No content-length: the length is not known up front, and declaring one
+    // would make the browser stop reading after the first chunk — which for an
+    // event stream looks like the server hanging.
+    response.writeHead(result.status, headers);
+    result.stream(
+      (chunk) => {
+        response.write(chunk);
+      },
+      () => {
+        response.end();
+      },
+    );
+    return;
+  }
+
+  const body = Buffer.from(result.body ?? "", "utf8");
   // Computed, never declared by a handler: a hand-written content-length that
   // disagreed with the body would produce a hang or a truncated response, and
   // debugging that from a scan's output is miserable.
@@ -226,6 +243,31 @@ export async function startFixture(
     })();
   });
 
+  // WebSocket endpoints, if the app declares any. Node routes upgrades away
+  // from the normal request path, so they cannot be ordinary routes.
+  if (app.websockets !== undefined && app.websockets.length > 0) {
+    server.on("upgrade", (incoming, socket) => {
+      const url = new URL(incoming.url ?? "/", `http://${HOST}`);
+      const route = app.websockets?.find((candidate) => candidate.path === url.pathname);
+      if (route === undefined) {
+        socket.end("HTTP/1.1 404 Not Found\r\n\r\n");
+        return;
+      }
+      sequence += 1;
+      requests.push({
+        sequence,
+        method: "GET",
+        pathname: url.pathname,
+        query: {},
+        headers: normalizeHeaders(incoming),
+        body: "",
+        // 101, because that is what the handshake answers with.
+        status: 101,
+      });
+      serveWebSocket(route, incoming, socket);
+    });
+  }
+
   server.keepAliveTimeout = KEEP_ALIVE_TIMEOUT_MS;
 
   await new Promise<void>((resolve, reject) => {
@@ -254,6 +296,10 @@ export async function startFixture(
       // Idle keep-alive sockets keep the server open, so a test that finished
       // its requests would otherwise hang here until the timeout.
       server.closeIdleConnections();
+      // A streaming response (SSE) or an open WebSocket is not idle, so
+      // `close` would wait for it forever. A fixture's lifetime ends when the
+      // test says so.
+      server.closeAllConnections();
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error === undefined ? resolve() : reject(error)));
       });

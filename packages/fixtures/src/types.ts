@@ -1,3 +1,5 @@
+import type { WebSocketRoute } from "./websocket.js";
+
 /**
  * Fixture app contract — build plan §36.1, dev plan BR-M0-13.
  *
@@ -34,6 +36,18 @@ export interface FixtureResponse {
    */
   readonly headers?: Readonly<Record<string, string>> | undefined;
   readonly body?: string | undefined;
+  /**
+   * Write the body in chunks instead of all at once.
+   *
+   * For Server-Sent Events, where the response deliberately never ends until
+   * the fixture says so. `content-length` is omitted when this is used — the
+   * point of the response is that its length is not known up front, and
+   * declaring one would make the browser stop reading after the first chunk.
+   *
+   * A streaming fixture still may not use a clock: `write` everything the test
+   * needs and call `end`, so the sequence is the same every run.
+   */
+  readonly stream?: ((write: (chunk: string) => void, end: () => void) => void) | undefined;
 }
 
 /**
@@ -67,6 +81,14 @@ export interface FixtureApp {
   readonly seedState?: (() => FixtureState) | undefined;
   /** Response for a path no route matches. Defaults to a plain 404. */
   readonly notFound?: FixtureHandler | undefined;
+  /**
+   * WebSocket endpoints.
+   *
+   * Separate from `routes` because an upgrade is not a request/response: the
+   * handler is handed a live connection, and the harness never writes a status
+   * line for it after the handshake.
+   */
+  readonly websockets?: readonly WebSocketRoute[] | undefined;
 }
 
 /** One request a running fixture received, in arrival order. */

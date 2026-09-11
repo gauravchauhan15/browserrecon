@@ -24,6 +24,9 @@ export interface Counters {
   frames: number;
   executionContexts: number;
   scripts: number;
+  webSockets: number;
+  webSocketFrames: number;
+  eventSourceMessages: number;
 }
 
 export function newCounters(): Counters {
@@ -38,6 +41,9 @@ export function newCounters(): Counters {
     frames: 0,
     executionContexts: 0,
     scripts: 0,
+    webSockets: 0,
+    webSocketFrames: 0,
+    eventSourceMessages: 0,
   };
 }
 

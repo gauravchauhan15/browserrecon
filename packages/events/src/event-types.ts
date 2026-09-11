@@ -32,6 +32,15 @@ export const EVENT_TYPES = [
   "network_request",
   "network_response",
   "network_failed",
+  // Persistent connections (dev plan BR-M1-05). §5.1 names WebSocket frames as
+  // a capability the MCP tool surface does not expose, and a long-lived
+  // application keeps the traffic that matters most here — a REST-shaped scan
+  // sees the handshake and nothing after it.
+  "websocket_created",
+  "websocket_opened",
+  "websocket_frame",
+  "websocket_closed",
+  "eventsource_message",
 
   // Runtime
   "console_message",

@@ -136,6 +136,11 @@ export interface TelemetryStats {
   readonly liveExecutionContexts: number;
   /** Distinct scripts inventoried, including inline and eval-ed ones. */
   readonly scripts: number;
+  /** WebSocket connections opened. */
+  readonly webSockets: number;
+  /** Frames seen in both directions, control frames included. */
+  readonly webSocketFrames: number;
+  readonly eventSourceMessages: number;
   /** CDP targets currently being watched. */
   readonly attachedTargets: number;
 }

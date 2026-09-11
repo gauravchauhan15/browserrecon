@@ -13,6 +13,11 @@ BR-M1-03, BR-M1-04.
   the frame tree every payload is attributed against.
 - `Runtime.*` → `js_execution_context`, and the live-context map.
 - `Debugger.scriptParsed` → `script_parsed`, the JS inventory.
+- WebSocket and EventSource → `websocket_created`, `websocket_opened`,
+  `websocket_frame`, `websocket_closed`, `eventsource_message`. §5.1 names
+  these as a capability the MCP tool surface does not expose, and a long-lived
+  application keeps the traffic that matters most here — a REST-shaped scan
+  sees the handshake and nothing after it.
 - Deciding which response bodies to keep (`body-policy.ts`, §41).
 
 All four domains share **one** attachment. Two `Target.setAutoAttach` calls on
@@ -132,6 +137,40 @@ one 40 MB bundle dominating the log, and a **per-scan budget** stops ten
 thousand small bodies doing it slowly. Hitting either is recorded on the event —
 `skipped: "too_large"` and `skipped: "budget_exhausted"` are different facts,
 and both differ from a response that genuinely had no body.
+
+## A measured CDP limitation: WebSocket control frames
+
+**Chrome never reports protocol ping and pong frames.** Measured, not assumed:
+the fixture sends a real opcode-0x9 ping and the DevTools Network domain
+reports nothing at all. That is a property of CDP, so no tool built on it can
+see them — this one or `chrome-devtools-mcp` alike.
+
+It matters because §17A names "WebSocket pings" as its first example of the
+`keepalive` role, and that specific case is **unreachable**. What is reachable,
+and what real applications overwhelmingly send, is an application-level
+heartbeat — a text frame whose content says it is one — and those are captured
+with their payload intact, which is what BR-M1-22 needs to classify them.
+
+A test pins the limitation, so if Chrome ever starts surfacing control frames
+it fails and tells us the constraint has lifted.
+
+SSE comments (`: keepalive`) are likewise not events, and are deliberately not
+reported as if they were — inventing application traffic that never existed is
+worse than not seeing the comment. The connection carrying them is still in the
+network log as a `text/event-stream` response, so the keepalive is not lost,
+merely not misfiled.
+
+## Frame payloads are capped, not free
+
+A chat application can push thousands of frames a minute, so frame payloads go
+through the same §41 budget as response bodies — with one deliberate
+difference: a frame's payload is always _considered_, because unlike a font or
+a video there is no such thing as a WebSocket frame whose content is knowably
+uninteresting. The cap does the filtering, not a content type.
+
+A skipped payload still produces an event. The shape of a conversation — how
+many frames, which direction, how big, in what order — is most of what makes it
+a workflow, and it survives even when the contents do not.
 
 ## Limits worth knowing
 

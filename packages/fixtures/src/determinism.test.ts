@@ -62,6 +62,14 @@ const PROBE_PATHS: Readonly<Record<string, readonly [string, string][]>> = {
     ["GET", "/api/leaf"],
     ["GET", "/second"],
   ],
+  "realtime-site": [
+    ["GET", "/"],
+    // /sse is deliberately absent. It is a stream, so its raw bytes include
+    // chunked-transfer framing that the runtime is free to arrange
+    // differently — comparing them would test Node's chunking, not the
+    // fixture. Its content is asserted directly in the telemetry tests.
+    ["GET", "/nowhere"],
+  ],
   "rest-api": [
     ["GET", "/api/v1/products"],
     ["GET", "/api/v1/products/2"],
@@ -72,6 +80,33 @@ const PROBE_PATHS: Readonly<Record<string, readonly [string, string][]>> = {
     ["POST", "/api/v1/orders"],
   ],
 };
+
+describe("the registry", () => {
+  it("lists every app in src/apps, so none escapes these guarantees", async () => {
+    // The array is what the determinism, no-egress and no-clock guarantees are
+    // applied to, so an app missing from it is an app exempt from all of them
+    // — silently. That is not hypothetical: realtime-site was written,
+    // exported and imported here, and simply never added to the list. Nothing
+    // failed, and it would have shipped unguarded.
+    const appsDir = fileURLToPath(new URL("./apps/", import.meta.url));
+    const files = readdirSync(appsDir).filter(
+      (name) => name.endsWith(".ts") && !name.endsWith(".test.ts"),
+    );
+
+    const exported = files.flatMap((file) => {
+      const source = readFileSync(join(appsDir, file), "utf8");
+      return [...source.matchAll(/export function (\w+)\(\): FixtureApp/g)].map(
+        (match) => match[1] as string,
+      );
+    });
+
+    expect(exported.length).toBeGreaterThanOrEqual(4);
+    const registered = ALL_FIXTURE_APPS.map((build) => build.name);
+    for (const name of exported) {
+      expect(registered, `${name} is not in ALL_FIXTURE_APPS`).toContain(name);
+    }
+  });
+});
 
 describe("byte-identical responses across runs", () => {
   it.each(ALL_FIXTURE_APPS.map((build) => [build().name, build] as const))(
