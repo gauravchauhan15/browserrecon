@@ -1,9 +1,9 @@
 /**
  * @browserrecon/telemetry-cdp — the observation boundary.
  *
- * Subscribes to raw CDP `Network.*` events for every browser target and
- * normalizes them into envelope events. Build plan §5.1, §13.1; dev plan
- * BR-M1-03.
+ * Subscribes to raw CDP `Network.*`, `Page.*`, `Runtime.*` and `Debugger.*`
+ * events for every browser target and normalizes them into envelope events.
+ * Build plan §5.1, §13.1, §16; dev plan BR-M1-03, BR-M1-04.
  *
  * Independent of whatever is driving the browser (§5.1): telemetry attaches to
  * the browser and observes every target that appears, so switching from the
@@ -17,8 +17,8 @@
 /** Package identity, used by diagnostics and the `doctor` command. */
 export const PACKAGE_NAME = "@browserrecon/telemetry-cdp" as const;
 
-export { attachNetworkTelemetry } from "./network.js";
-export type { NetworkTelemetry, NetworkTelemetryOptions } from "./network.js";
+export { attachTelemetry } from "./telemetry.js";
+export type { Telemetry, TelemetryOptions } from "./telemetry.js";
 
 export {
   BODY_CAPTURE_RULES,
@@ -32,6 +32,17 @@ export type {
   CaptureInput,
   SkipReason,
 } from "./body-policy.js";
+
+export type { PageDomainOptions } from "./page-domain.js";
+
+export type {
+  ExecutionContextPayload,
+  FrameRef,
+  NavigationCommittedPayload,
+  NavigationStartedPayload,
+  PageLoadedPayload,
+  ScriptParsedPayload,
+} from "./page-types.js";
 
 export type {
   NetworkFailedPayload,

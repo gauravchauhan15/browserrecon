@@ -15,8 +15,9 @@ import {
 } from "@browserrecon/browser-manager";
 import { startFixture, restApi, staticSite, type RunningFixture } from "@browserrecon/fixtures";
 import { EventBus, type EventEnvelope } from "@browserrecon/events";
-import { attachNetworkTelemetry } from "./network.js";
-import type { NetworkRequestPayload, NetworkResponsePayload } from "./types.js";
+import { attachTelemetry } from "./telemetry.js";
+import type { NetworkRequestPayload, NetworkResponsePayload, TelemetryStats } from "./types.js";
+import type { BodyCaptureLimits } from "./body-policy.js";
 
 const probes: ChromeProbes = {
   fileExists: (path) => existsSync(path),
@@ -101,7 +102,7 @@ describe("completeness under load", () => {
       const origin = fixture?.origin ?? "";
       const bus = new EventBus();
       const seen = collector(bus);
-      const telemetry = await attachNetworkTelemetry({
+      const telemetry = await attachTelemetry({
         browser: (session as BrowserSession).browser,
         bus,
       });
@@ -170,7 +171,7 @@ describe("completeness under load", () => {
       });
       await witness.send("Network.enable");
 
-      const telemetry = await attachNetworkTelemetry({
+      const telemetry = await attachTelemetry({
         browser: (session as BrowserSession).browser,
         bus,
       });
@@ -209,7 +210,7 @@ describe("completeness under load", () => {
       const origin = fixture?.origin ?? "";
       const bus = new EventBus();
       const seen = collector(bus);
-      const telemetry = await attachNetworkTelemetry({
+      const telemetry = await attachTelemetry({
         browser: (session as BrowserSession).browser,
         bus,
       });
@@ -261,15 +262,11 @@ describe("what each event carries", () => {
 
   async function visit(
     path: string,
-    options: Parameters<typeof attachNetworkTelemetry>[0] extends never
-      ? never
-      : Partial<{
-          bodyLimits: { enabled: boolean; maxBodyBytes: number; maxTotalBytes: number };
-        }> = {},
-  ) {
+    options: { bodyLimits?: Partial<BodyCaptureLimits> } = {},
+  ): Promise<{ seen: EventEnvelope[]; stats: TelemetryStats }> {
     const bus = new EventBus();
     const seen = collector(bus);
-    const telemetry = await attachNetworkTelemetry({
+    const telemetry = await attachTelemetry({
       browser: (session as BrowserSession).browser,
       bus,
       ...(options.bodyLimits === undefined ? {} : { bodyLimits: options.bodyLimits }),
@@ -378,7 +375,7 @@ describe("what each event carries", () => {
     async () => {
       const bus = new EventBus();
       const seen = collector(bus);
-      const telemetry = await attachNetworkTelemetry({
+      const telemetry = await attachTelemetry({
         browser: (session as BrowserSession).browser,
         bus,
       });
@@ -432,7 +429,7 @@ describe("independence from the control layer", () => {
       // itself — is observed without anyone wiring it up.
       const bus = new EventBus();
       const seen = collector(bus);
-      const telemetry = await attachNetworkTelemetry({
+      const telemetry = await attachTelemetry({
         browser: (session as BrowserSession).browser,
         bus,
       });
@@ -460,7 +457,7 @@ describe("independence from the control layer", () => {
       // already be watching the browser for this to be captured at all.
       const bus = new EventBus();
       const seen = collector(bus);
-      const telemetry = await attachNetworkTelemetry({
+      const telemetry = await attachTelemetry({
         browser: (session as BrowserSession).browser,
         bus,
       });
@@ -490,7 +487,7 @@ describe("independence from the control layer", () => {
     async () => {
       const bus = new EventBus();
       const seen = collector(bus);
-      const telemetry = await attachNetworkTelemetry({
+      const telemetry = await attachTelemetry({
         browser: (session as BrowserSession).browser,
         bus,
       });

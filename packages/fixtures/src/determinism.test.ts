@@ -52,6 +52,16 @@ const PROBE_PATHS: Readonly<Record<string, readonly [string, string][]>> = {
     ["GET", "/nowhere"],
     ["POST", "/contact"],
   ],
+  "framed-site": [
+    ["GET", "/frames"],
+    ["GET", "/frames/panel"],
+    ["GET", "/frames/deep"],
+    ["GET", "/frames/leaf"],
+    ["GET", "/frames/late"],
+    ["GET", "/api/panel"],
+    ["GET", "/api/leaf"],
+    ["GET", "/second"],
+  ],
   "rest-api": [
     ["GET", "/api/v1/products"],
     ["GET", "/api/v1/products/2"],

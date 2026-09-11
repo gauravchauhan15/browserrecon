@@ -264,7 +264,10 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
       if (element === null) {
         return failed("click", "element_not_found", `no element matches ${selector}`);
       }
-      facts = await element.evaluate(readFacts);
+      // Bounded like the click itself. `evaluate` takes no timeout, and a
+      // page that is navigating — or a machine that is thrashing — can leave
+      // it waiting on an execution context that is going away.
+      facts = await withDeadline(element.evaluate(readFacts), timeout, `inspect ${selector}`);
     } catch (error) {
       const { kind, detail } = classify(error);
       // A selector that never appears is the ordinary case, not an error worth
@@ -279,7 +282,7 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
     const refusal = this.#check("click", { stateChanging: verdict.stateChanging });
     if (refusal) {
       this.#log.info("click refused", { selector, because: verdict.because });
-      await element.dispose().catch(() => undefined);
+      await withDeadline(element.dispose(), timeout, "dispose").catch(() => undefined);
       return refusal;
     }
 
@@ -290,7 +293,7 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
       const { kind, detail } = classify(error);
       return failed("click", kind, detail);
     } finally {
-      await element.dispose().catch(() => undefined);
+      await withDeadline(element.dispose(), timeout, "dispose").catch(() => undefined);
     }
   }
 
@@ -385,7 +388,11 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
 
   async close(): Promise<void> {
     try {
-      if (!this.#page.isClosed()) await this.#page.close();
+      // Bounded too. Teardown that hangs turns one slow test into a suite that
+      // never finishes, and the symptom points nowhere near the cause.
+      if (!this.#page.isClosed()) {
+        await withDeadline(this.#page.close(), this.#timeout, "close page");
+      }
     } catch {
       // The browser may already be gone; the manager owns that lifetime and
       // will have cleaned up regardless.

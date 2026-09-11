@@ -1,15 +1,23 @@
 # @browserrecon/telemetry-cdp
 
-The observation boundary. Subscribes to raw CDP `Network.*` for every browser
-target and normalizes what Chrome reports into envelope events. Build plan
-§5.1, §13.1, §41; dev plan BR-M1-03.
+The observation boundary. Subscribes to raw CDP `Network.*`, `Page.*`,
+`Runtime.*` and `Debugger.*` for every browser target and normalizes what
+Chrome reports into envelope events. Build plan §5.1, §13.1, §16, §41; dev plan
+BR-M1-03, BR-M1-04.
 
 ## Owns
 
 - Attaching to every target, present and future, without a gap.
-- Normalizing `Network.*` into `network_request`, `network_response` and
-  `network_failed` payloads.
+- `Network.*` → `network_request`, `network_response`, `network_failed`.
+- `Page.*` → `navigation_started`, `navigation_committed`, `page_loaded`, and
+  the frame tree every payload is attributed against.
+- `Runtime.*` → `js_execution_context`, and the live-context map.
+- `Debugger.scriptParsed` → `script_parsed`, the JS inventory.
 - Deciding which response bodies to keep (`body-policy.ts`, §41).
+
+All four domains share **one** attachment. Two `Target.setAutoAttach` calls on
+the same browser would fight: the second replaces the first's settings, and
+only one would ever hear about a new target.
 
 ## Does not own
 
@@ -44,6 +52,48 @@ to a page also means telemetry is never handed anything by the control layer —
 §5.1 requires switching drivers to change nothing about what is captured, and a
 tab the _site_ opens for itself is observed the same as one the explorer
 opened.
+
+## Frames are not a detail
+
+Every Page payload carries `frameId`, `parentFrameId` and `isMainFrame`, and
+network requests carry the frame that issued them. The error this prevents is
+not cosmetic: a scan that merges an iframe's activity into the top document
+reports a third-party widget's endpoints as the target's own attack surface,
+and one that drops frames misses the surface that exists. Neither is
+recoverable later, because the evidence for the distinction was never written
+down (§32.1).
+
+The main frame's identity is read from `Page.getFrameTree` **at attach**, not
+inferred from the first `frameNavigated`. Inferring it is too late: a fresh
+target starts loading before anything has said which frame is the top document,
+so every main-frame navigation was being reported as a subframe until this was
+fixed.
+
+## Navigation ids are allocated, not derived
+
+CDP has no single identifier spanning a navigation's start and its commit —
+`frameRequestedNavigation` names a frame and a URL, and the loader id only
+exists once the navigation has committed. So an id is allocated when a frame
+starts moving and carried through, which is what makes the pair joinable for
+BR-M1-07's soft-navigation work and §18's workflow boundaries.
+
+## Execution contexts must not leak
+
+Chrome reuses context ids. A stale id left in the map after a navigation
+attributes the new page's scripts to the old page's context, and the error is
+invisible — everything still has _an_ id. So `executionContextDestroyed`,
+`executionContextsCleared` and frame detachment all prune the map, and
+`stats.liveExecutionContexts` is the signal: a count that only grows across
+navigations means ids are leaking.
+
+## Scripts, not files
+
+`Debugger.scriptParsed` exists in this package because the network and the
+debugger see different things. The network sees _files_; this sees _scripts_ —
+inline blocks, `eval`, `new Function`, anything a bundler injects at runtime.
+§10A's mining has nothing to read for those unless they are inventoried here.
+It does mean enabling the Debugger domain, which instruments V8, so
+`inventoryScripts: false` turns it off for a scan that only wants network data.
 
 ## What every event carries
 

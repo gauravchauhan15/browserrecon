@@ -19,7 +19,10 @@ import { PROVENANCE } from "./provenance.js";
  * Compatibility policy: additive fields are a minor bump; removing or
  * retyping a field is a major bump.
  */
-export const EVENT_SCHEMA_VERSION = "1.0.0";
+// 1.1.0 — added the `script_parsed` event type (BR-M1-04). Additive: a
+// consumer that does not know the type ignores it, which is why this is a
+// minor bump rather than a major one.
+export const EVENT_SCHEMA_VERSION = "1.1.0";
 
 const idPattern = (kind: keyof typeof ID_KINDS): string => {
   const { prefix, width } = ID_KINDS[kind];

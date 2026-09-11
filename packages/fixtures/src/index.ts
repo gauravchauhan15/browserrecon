@@ -27,7 +27,9 @@ export type {
 
 export { staticSite } from "./apps/static-site.js";
 export { restApi } from "./apps/rest-api.js";
+export { framedSite } from "./apps/framed-site.js";
 
+import { framedSite } from "./apps/framed-site.js";
 import { restApi } from "./apps/rest-api.js";
 import { staticSite } from "./apps/static-site.js";
 import type { FixtureApp } from "./types.js";
@@ -41,4 +43,8 @@ import type { FixtureApp } from "./types.js";
  * immediately subject to them, instead of being exempt until someone
  * remembers to extend a test.
  */
-export const ALL_FIXTURE_APPS: readonly (() => FixtureApp)[] = [staticSite, restApi];
+export const ALL_FIXTURE_APPS: readonly (() => FixtureApp)[] = [
+  staticSite,
+  restApi,
+  framedSite,
+];

@@ -36,6 +36,11 @@ export const EVENT_TYPES = [
   // Runtime
   "console_message",
   "js_execution_context",
+  // A script the page parsed, from Debugger.scriptParsed — distinct from the
+  // network events, which see files. This sees scripts: inline blocks, eval,
+  // new Function, anything a bundler injects at runtime. §10A has nothing to
+  // mine for those unless they are inventoried (dev plan BR-M1-04).
+  "script_parsed",
   "storage_observation",
   "cookie_observation",
 

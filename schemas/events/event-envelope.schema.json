@@ -3,7 +3,7 @@
   "$id": "https://github.com/gauravchauhan15/browserrecon/schemas/events/event-envelope.schema.json",
   "title": "BrowserRecon event envelope",
   "description": "Common envelope carried by every BrowserRecon observation (build plan §13.2). Ordering authority is `sequence`, not `timestamp`.",
-  "x-schema-version": "1.0.0",
+  "x-schema-version": "1.1.0",
   "type": "object",
   "required": [
     "event_id",
@@ -53,6 +53,7 @@
         "network_failed",
         "console_message",
         "js_execution_context",
+        "script_parsed",
         "storage_observation",
         "cookie_observation",
         "discovery_imported",

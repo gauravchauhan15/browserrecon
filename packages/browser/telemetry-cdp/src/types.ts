@@ -123,6 +123,19 @@ export interface TelemetryStats {
    * observation started late and the log is not complete.
    */
   readonly orphanEvents: number;
+  readonly navigations: number;
+  /** Frames currently attached across every watched target. */
+  readonly frames: number;
+  /**
+   * Execution contexts currently alive.
+   *
+   * A count that only grows across navigations means stale ids are leaking,
+   * and every script after that point is attributed to a context that no
+   * longer exists.
+   */
+  readonly liveExecutionContexts: number;
+  /** Distinct scripts inventoried, including inline and eval-ed ones. */
+  readonly scripts: number;
   /** CDP targets currently being watched. */
   readonly attachedTargets: number;
 }
