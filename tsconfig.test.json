@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+
+  // Type-checks the test suite, which nothing else does.
+  //
+  // Every package tsconfig excludes `src/**/*.test.ts`, and correctly so — a
+  // test has no business in `dist/`. But that exclusion also removed tests
+  // from `tsc --build` entirely, and the other two tools that touch them do
+  // not type-check either: eslint runs the non-type-aware ruleset, and vitest
+  // transpiles through esbuild. The result was a suite carrying much of this
+  // project's correctness argument while being free to assert against an API
+  // shape that no longer exists.
+  //
+  // Verified before this file existed: a literal `const broken: number =
+  // "definitely not a number"` in a test file left both `typecheck` and `lint`
+  // completely silent.
+  //
+  // This project emits nothing, so it cannot be part of the `tsc --build`
+  // solution graph (composite projects must emit). It is checked separately,
+  // and must run AFTER `typecheck` — workspace imports resolve through
+  // node_modules to each package's `dist/`, which the build produces. Same
+  // ordering constraint the schema check already has.
+  "extends": "./tsconfig.base.json",
+
+  "compilerOptions": {
+    "noEmit": true,
+    // All three exist to satisfy the build graph and are meaningless without
+    // emit; left on, TypeScript rejects the config rather than ignoring them.
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    // Incremental state would need its own build-info file for a project that
+    // writes nothing. Checking the suite takes about a second; the cache is
+    // not worth the extra artifact.
+    "incremental": false
+  },
+
+  "include": [
+    "apps/*/src/**/*.test.ts",
+    "packages/**/src/**/*.test.ts",
+    // tests/ is tests end to end — helpers and suites alike, at whatever
+    // depth. tests/meta asserts these very patterns cover every test file.
+    "tests/**/*.ts"
+  ]
+}

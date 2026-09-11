@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createEnvelope, type EventEnvelope } from "@browserrecon/events";
-import { EventStore, type Checkpoint, type Manifest } from "./store.js";
+import { EventStore, type Checkpoint, type EventStoreOptions, type Manifest } from "./store.js";
 import { readAllEvents, readManifest, payloadIsExternal } from "./reader.js";
 import { isExternalBodyRef, BodyStore } from "./bodies.js";
 import { sessionPaths } from "./layout.js";
@@ -23,10 +23,19 @@ function envelope(sequence: number, payload: unknown = {}): EventEnvelope {
   });
 }
 
-const store = (
-  d: string,
-  options: Partial<Parameters<typeof EventStore.prototype.constructor>[0]> = {},
-) => new EventStore({ dir: d, sessionId: "sess_0001", ...options });
+/**
+ * A store in a scratch directory, with the tuning knobs overridable per test.
+ *
+ * The options type used to be derived as `Parameters<typeof
+ * EventStore.prototype.constructor>[0]`, which resolves to `Function`'s
+ * parameters rather than the class constructor's — so it collapsed to `never`
+ * and every call site's options object went unchecked. Naming
+ * `EventStoreOptions` directly is both correct and readable. (Found the day
+ * test files started being type-checked; nothing had flagged it for four
+ * milestones.)
+ */
+const store = (d: string, options: Partial<EventStoreOptions> = {}): EventStore =>
+  new EventStore({ dir: d, sessionId: "sess_0001", ...options });
 
 describe("append and read", () => {
   it("round-trips events in sequence order", async () => {

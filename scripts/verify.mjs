@@ -24,6 +24,18 @@ const bin = (tool) => {
 
 const steps = [
   { name: "typecheck", cmd: bin("tsc"), args: ["--build", "--force"], required: true },
+  {
+    // Tests are excluded from every package's build so they never reach dist/,
+    // which also left them unchecked by `typecheck`, by eslint's non-type-aware
+    // ruleset, and by vitest's esbuild transpile. A suite free to assert
+    // against an API shape that no longer exists is a suite that can go quietly
+    // wrong. Runs after typecheck, which builds the dist/ these imports
+    // resolve through.
+    name: "typecheck tests",
+    cmd: bin("tsc"),
+    args: ["-p", "tsconfig.test.json"],
+    required: true,
+  },
   { name: "lint", cmd: bin("eslint"), args: ["."], required: true },
   { name: "format", cmd: bin("prettier"), args: ["--check", "."], required: true },
   { name: "test", cmd: bin("vitest"), args: ["run"], required: true },

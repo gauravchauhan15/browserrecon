@@ -73,6 +73,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - run: pnpm run typecheck
+
+      # Test files are excluded from every package's build so they never land
+      # in dist/ — which also meant nothing type-checked them: not `typecheck`,
+      # not eslint's non-type-aware ruleset, not vitest's esbuild transpile.
+      # Runs after `typecheck`, whose build produces the dist/ that the test
+      # project's workspace imports resolve through.
+      - name: Type-check the test suite
+        run: pnpm exec tsc -p tsconfig.test.json
+
       - run: pnpm run lint
       - run: pnpm run format:check
       - run: pnpm run test
