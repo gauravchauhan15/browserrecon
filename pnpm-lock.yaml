@@ -161,6 +161,25 @@ importers:
         specifier: workspace:*
         version: link:../policy
 
+  packages/browser/adapter:
+    dependencies:
+      '@browserrecon/browser-manager':
+        specifier: workspace:*
+        version: link:../manager
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/policy':
+        specifier: workspace:*
+        version: link:../../policy
+      puppeteer-core:
+        specifier: ^25.10.0
+        version: 25.10.0
+    devDependencies:
+      '@browserrecon/fixtures':
+        specifier: workspace:*
+        version: link:../../fixtures
+
   packages/browser/manager:
     dependencies:
       '@browserrecon/core':

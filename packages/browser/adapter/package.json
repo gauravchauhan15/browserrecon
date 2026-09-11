@@ -1,0 +1,29 @@
+{
+  "name": "@browserrecon/browser-adapter",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The control boundary: every browser action, validated by policy before it happens",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@browserrecon/browser-manager": "workspace:*",
+    "@browserrecon/core": "workspace:*",
+    "@browserrecon/policy": "workspace:*",
+    "puppeteer-core": "^25.10.0"
+  },
+  "devDependencies": {
+    "@browserrecon/fixtures": "workspace:*"
+  }
+}
