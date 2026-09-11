@@ -32,6 +32,7 @@ import { existsSync, statfsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { platform } from "node:os";
 import { CONFIG_SPEC, MODEL_TIERS, loadConfig } from "@browserrecon/config";
+import { CHROME_PATH_ENV, resolveChromePath } from "@browserrecon/browser-manager";
 import { CliError, EXIT_CODES } from "../exit-codes.js";
 
 export type CheckStatus = "ok" | "limitation" | "blocker";
@@ -78,39 +79,6 @@ const MIN_FREE_DISK_BYTES = 2 * 1024 * 1024 * 1024;
 
 const DEFAULT_OLLAMA_HOST = "http://127.0.0.1:11434";
 
-/**
- * Where Chrome usually lives, by platform.
- *
- * Checked before `PATH` because on macOS the app bundle is the normal install
- * and puts nothing on `PATH` — a `which` lookup alone would report "missing"
- * on a machine that plainly has Chrome.
- */
-const CHROME_PATHS: Readonly<Record<string, readonly string[]>> = {
-  darwin: [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-  ],
-  win32: [
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-  ],
-  linux: [
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/snap/bin/chromium",
-  ],
-};
-
-const CHROME_COMMANDS = [
-  "google-chrome",
-  "google-chrome-stable",
-  "chromium",
-  "chromium-browser",
-];
-
 /** §25.1: tier names are conveniences that resolve to a default model. */
 export const TIER_MODELS: Readonly<Record<(typeof MODEL_TIERS)[number], string>> = {
   small: "qwen3:4b",
@@ -144,60 +112,34 @@ function checkNode(probes: Probes): CheckResult {
 }
 
 function checkChrome(probes: Probes): CheckResult {
-  // `browser.executablePath`, §25: an explicit choice outranks detection.
-  const configured = probes.env.BROWSERRECON_CHROME_PATH;
+  // Resolution lives in @browserrecon/browser-manager, not here. doctor's job
+  // is to tell a user whether a scan will find a browser, so it must ask the
+  // same question the scan asks. Two copies of the search list would
+  // eventually disagree, and the symptom — "doctor says Chrome is fine but the
+  // scan cannot start it" — sends the reader hunting in the wrong place.
+  const found = resolveChromePath(probes, probes.env[CHROME_PATH_ENV]);
 
-  if (configured !== undefined && configured !== "") {
-    if (!probes.fileExists(configured)) {
-      return {
-        name: "Chrome",
-        status: "blocker",
-        detail: "configured path does not exist",
-        impact:
-          "BrowserRecon observes a real browser; without one there is nothing to observe.",
-        // Not falling back to a detected Chrome: the user asked for a specific
-        // binary, and quietly using a different one would make every
-        // observation describe a browser they did not choose.
-        remedy: `BROWSERRECON_CHROME_PATH points at ${configured}. Fix it, or unset it to auto-detect.`,
-      };
-    }
-    const version = probes.runCommand(configured, ["--version"]);
+  if (!found.found) {
     return {
       name: "Chrome",
-      status: "ok",
-      detail: `${firstLine(version?.stdout ?? "") || "version unknown"} (configured)`,
+      status: "blocker",
+      detail: found.reason,
+      impact: "BrowserRecon observes a real browser; without one there is nothing to observe.",
+      remedy: found.remedy,
     };
   }
 
-  for (const path of CHROME_PATHS[probes.platform] ?? []) {
-    if (!probes.fileExists(path)) continue;
-    const version = probes.runCommand(path, ["--version"]);
-    return {
-      name: "Chrome",
-      status: "ok",
-      detail: `${firstLine(version?.stdout ?? "") || "version unknown"} — ${path}`,
-    };
-  }
-
-  for (const command of CHROME_COMMANDS) {
-    const version = probes.runCommand(command, ["--version"]);
-    if (version !== undefined) {
-      return {
-        name: "Chrome",
-        status: "ok",
-        detail: `${firstLine(version.stdout) || "version unknown"} — on PATH`,
-      };
-    }
-  }
+  const where =
+    found.source === "configured"
+      ? "configured"
+      : found.source === "path"
+        ? "on PATH"
+        : found.executablePath;
 
   return {
     name: "Chrome",
-    status: "blocker",
-    detail: "not found",
-    impact: "BrowserRecon observes a real browser; without one there is nothing to observe.",
-    remedy:
-      "Install Chrome or Chromium, or set BROWSERRECON_CHROME_PATH to an existing binary. " +
-      "https://www.google.com/chrome",
+    status: "ok",
+    detail: `${found.version ?? "version unknown"} — ${where}`,
   };
 }
 

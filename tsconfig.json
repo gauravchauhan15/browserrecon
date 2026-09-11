@@ -9,6 +9,9 @@
       "path": "./packages/authorization"
     },
     {
+      "path": "./packages/browser/manager"
+    },
+    {
       "path": "./packages/config"
     },
     {

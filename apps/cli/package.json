@@ -18,11 +18,12 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
+    "@browserrecon/browser-manager": "workspace:*",
     "@browserrecon/config": "workspace:*",
     "@browserrecon/core": "workspace:*",
+    "@browserrecon/events": "workspace:*",
     "@browserrecon/policy": "workspace:*",
-    "commander": "^15.0.0",
-    "@browserrecon/events": "workspace:*"
+    "commander": "^15.0.0"
   },
   "bin": {
     "browserrecon": "./bin/browserrecon.js"

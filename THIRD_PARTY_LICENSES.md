@@ -13,18 +13,19 @@ dependency surface.
 
 Attribution required. Verified at the pinned versions.
 
-| Component                  | License    | Role                                     |
-| -------------------------- | ---------- | ---------------------------------------- |
-| yaml (`yaml@2`)            | ISC        | Runtime — parses YAML config (§7.2, §11) |
-| commander (`commander@15`) | MIT        | Runtime — CLI argument parsing (§30)     |
-| TypeScript                 | Apache-2.0 | Build toolchain                          |
-| ESLint                     | MIT        | Lint toolchain                           |
-| Prettier                   | MIT        | Format toolchain                         |
-| Vitest                     | MIT        | Test runner                              |
+| Component                            | License    | Role                                                                                             |
+| ------------------------------------ | ---------- | ------------------------------------------------------------------------------------------------ |
+| yaml (`yaml@2`)                      | ISC        | Runtime — parses YAML config (§7.2, §11)                                                         |
+| commander (`commander@15`)           | MIT        | Runtime — CLI argument parsing (§30)                                                             |
+| puppeteer-core (`puppeteer-core@25`) | Apache-2.0 | Runtime — Chrome launch and control (§6, §22.3). `-core`, so no browser is downloaded at install |
+| TypeScript                           | Apache-2.0 | Build toolchain                                                                                  |
+| ESLint                               | MIT        | Lint toolchain                                                                                   |
+| Prettier                             | MIT        | Format toolchain                                                                                 |
+| Vitest                               | MIT        | Test runner                                                                                      |
 
 _Runtime dependencies are added to this table by the story that introduces
-them. Still expected per the build plan: Puppeteer (Apache-2.0), tree-sitter
-and tree-sitter-javascript (MIT), and — from V5 — chrome-devtools-mcp
+them. Still expected per the build plan: tree-sitter and
+tree-sitter-javascript (MIT), and — from V5 — chrome-devtools-mcp
 (Apache-2.0)._
 
 ## Invoked — external, user-installed, never bundled
@@ -53,7 +54,7 @@ CI enforces a license allowlist (`MIT`, `Apache-2.0`, `BSD-2-Clause`,
 `BSD-3-Clause`, `ISC`) across all dependencies including transitive ones, so a
 component outside that set cannot enter the tree without failing the build.
 
-|               |                                      |
-| ------------- | ------------------------------------ |
-| Last verified | 2026-09-10                           |
-| Verified by   | initial scaffold (dev plan BR-M0-01) |
+|               |                                  |
+| ------------- | -------------------------------- |
+| Last verified | 2026-09-11                       |
+| Verified by   | dev plan BR-M1-01 (202 packages) |

@@ -8,16 +8,19 @@
   "exclude": ["src/**/*.test.ts"],
   "references": [
     {
-      "path": "../../packages/core"
+      "path": "../../packages/browser/manager"
     },
     {
       "path": "../../packages/config"
     },
     {
-      "path": "../../packages/policy"
+      "path": "../../packages/core"
     },
     {
       "path": "../../packages/events"
+    },
+    {
+      "path": "../../packages/policy"
     }
   ]
 }

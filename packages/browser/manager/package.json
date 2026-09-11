@@ -1,0 +1,28 @@
+{
+  "name": "@browserrecon/browser-manager",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Chrome lifecycle: isolated per-scan profiles, launch and guaranteed teardown",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@browserrecon/core": "workspace:*",
+    "@browserrecon/policy": "workspace:*",
+    "puppeteer-core": "^25.10.0"
+  },
+  "devDependencies": {
+    "@browserrecon/fixtures": "workspace:*"
+  }
+}
