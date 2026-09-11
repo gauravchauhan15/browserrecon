@@ -341,6 +341,39 @@ describe("denials are typed, never thrown", () => {
   );
 
   browserTest(
+    "answers within its budget rather than hanging, whatever the driver does",
+    async () => {
+      // The adapter promises every action answers inside its timeout. The
+      // driver does not: ElementHandle.click takes no timeout, and when the
+      // click causes a navigation its underlying CDP calls can be left waiting
+      // on an execution context that no longer exists. Observed as a
+      // form-submitting click hanging past sixty seconds on a loaded machine
+      // while passing in isolation — so the budget is enforced by the adapter
+      // rather than hoped for.
+      const origin = fixture?.origin ?? "";
+      const engine = new PolicyEngine(policyFor(origin));
+      const adapter = await PuppeteerBrowserAdapter.create({
+        session: session as BrowserSession,
+        engine,
+      });
+
+      try {
+        await adapter.navigate(`${origin}/contact`);
+        const started = Date.now();
+        const result = await adapter.click('input[name="email"]', { timeoutMs: 1 });
+
+        // Either it beat the deadline or it reported a typed failure. What it
+        // must never do is take materially longer than asked.
+        expect(["ok", "failed"]).toContain(result.status);
+        expect(Date.now() - started).toBeLessThan(5_000);
+      } finally {
+        await adapter.close();
+      }
+    },
+    60_000,
+  );
+
+  browserTest(
     "reports an unreachable target as a failure, not a crash",
     async () => {
       const engine = new PolicyEngine(policyFor("http://127.0.0.1:1"));

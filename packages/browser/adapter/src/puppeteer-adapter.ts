@@ -53,6 +53,40 @@ import {
 const DEFAULT_ACTION_TIMEOUT_MS = 15_000;
 const DEFAULT_SETTLE_TIMEOUT_MS = 5_000;
 
+/**
+ * Bound a driver call that takes no timeout of its own.
+ *
+ * `ElementHandle.click` has no timeout parameter, and it is not merely a
+ * dispatch: it scrolls the element into view and reads its box model over CDP
+ * first. When the click causes a navigation, those commands can be left
+ * waiting on an execution context that no longer exists — and the call never
+ * settles. Observed as a form-submitting click hanging past a sixty-second
+ * test timeout on a loaded machine, while passing in isolation.
+ *
+ * The adapter promises every action answers within its budget and that nothing
+ * opaque escapes. A call that can hang forever breaks both, whatever the
+ * driver's excuse, so the budget is enforced here rather than hoped for.
+ */
+function withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const error = new Error(`${what} did not settle within ${ms}ms`);
+      error.name = "TimeoutError";
+      reject(error);
+    }, ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
+}
+
 export interface PuppeteerAdapterOptions {
   readonly session: BrowserSession;
   readonly engine: PolicyEngine;
@@ -135,6 +169,9 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
   /** Open a page in the session's browser and wrap it. */
   static async create(options: PuppeteerAdapterOptions): Promise<PuppeteerBrowserAdapter> {
     const page = await options.session.browser.newPage();
+    // The adapter's budget becomes the page's, so any driver call that takes a
+    // timeout and is not given one still answers within it.
+    page.setDefaultTimeout(options.defaultTimeoutMs ?? DEFAULT_ACTION_TIMEOUT_MS);
     return new PuppeteerBrowserAdapter(page, options);
   }
 
@@ -214,9 +251,16 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
   async click(selector: string, options: ActionOptions = {}): Promise<ActionResult<void>> {
     const timeout = options.timeoutMs ?? this.#timeout;
 
+    // The element is found once and then acted on directly. The obvious
+    // `page.click(selector)` would look the element up a second time, and it
+    // takes no timeout in this driver — so a caller asking for 500ms got
+    // puppeteer's 30s page default instead. That surfaced as a test hanging
+    // for a minute rather than failing, and in a scan it would be a budget
+    // nobody honours.
+    let element: Awaited<ReturnType<Page["waitForSelector"]>>;
     let facts: ElementFacts;
     try {
-      const element = await this.#page.waitForSelector(selector, { timeout });
+      element = await this.#page.waitForSelector(selector, { timeout });
       if (element === null) {
         return failed("click", "element_not_found", `no element matches ${selector}`);
       }
@@ -235,15 +279,18 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
     const refusal = this.#check("click", { stateChanging: verdict.stateChanging });
     if (refusal) {
       this.#log.info("click refused", { selector, because: verdict.because });
+      await element.dispose().catch(() => undefined);
       return refusal;
     }
 
     try {
-      await this.#page.click(selector, { delay: 0 });
+      await withDeadline(element.click(), timeout, `click on ${selector}`);
       return ok(undefined);
     } catch (error) {
       const { kind, detail } = classify(error);
       return failed("click", kind, detail);
+    } finally {
+      await element.dispose().catch(() => undefined);
     }
   }
 

@@ -196,6 +196,28 @@ importers:
         specifier: workspace:*
         version: link:../../fixtures
 
+  packages/browser/telemetry-cdp:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+      '@browserrecon/policy':
+        specifier: workspace:*
+        version: link:../../policy
+      puppeteer-core:
+        specifier: ^25.10.0
+        version: 25.10.0
+    devDependencies:
+      '@browserrecon/browser-manager':
+        specifier: workspace:*
+        version: link:../manager
+      '@browserrecon/fixtures':
+        specifier: workspace:*
+        version: link:../../fixtures
+
   packages/config:
     dependencies:
       '@browserrecon/core':
