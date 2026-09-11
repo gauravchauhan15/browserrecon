@@ -138,20 +138,21 @@ export interface ElevatedRisk {
 export function elevatedRisks(policy: TargetPolicy): readonly ElevatedRisk[] {
   const risks: ElevatedRisk[] = [];
 
+  // One entry, with the consequence escalating by severity. Reporting the
+  // generic mutating-methods warning *and* a DELETE-specific one produced two
+  // lines with an identical setting label when DELETE was the only mutating
+  // method enabled, which reads as a duplicate rather than as two concerns.
   const mutating = policy.allowedMethods.filter(isMutating);
   if (mutating.length > 0) {
+    const base =
+      "The scan may change data on the target — submitting forms, creating records, " +
+      "or triggering emails and payments.";
+    const destructive = policy.allowedMethods.includes("DELETE")
+      ? " DELETE is enabled, so it may also permanently delete data."
+      : "";
     risks.push({
       setting: `allowedMethods: ${mutating.join(", ")}`,
-      consequence:
-        "The scan may change data on the target — submitting forms, creating records, " +
-        "or triggering emails and payments. Only use this on a target you control.",
-    });
-  }
-
-  if (policy.allowedMethods.includes("DELETE")) {
-    risks.push({
-      setting: "allowedMethods: DELETE",
-      consequence: "The scan may permanently delete data on the target.",
+      consequence: `${base}${destructive} Only use this on a target you control.`,
     });
   }
 

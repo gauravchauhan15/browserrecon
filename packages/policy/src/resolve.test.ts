@@ -180,9 +180,23 @@ describe("elevatedRisks", () => {
     expect(risks[0]?.consequence).toMatch(/change data on the target/i);
   });
 
-  it("flags DELETE separately and more bluntly", () => {
+  it("escalates the consequence when DELETE is enabled", () => {
     const risks = withConfig({ policy: { allowedMethods: ["GET", "DELETE"] } });
     expect(risks.some((r) => /permanently delete/i.test(r.consequence))).toBe(true);
+  });
+
+  it("reports mutating methods as one entry, not one per severity", () => {
+    // Two entries sharing the label `allowedMethods: DELETE` read as a
+    // duplicate rather than as two concerns. It is one setting.
+    const risks = withConfig({ policy: { allowedMethods: ["GET", "DELETE"] } });
+    const methodRisks = risks.filter((r) => r.setting.startsWith("allowedMethods"));
+    expect(methodRisks).toHaveLength(1);
+    expect(new Set(risks.map((r) => r.setting)).size).toBe(risks.length);
+  });
+
+  it("omits the DELETE wording when DELETE is not enabled", () => {
+    const risks = withConfig({ policy: { allowedMethods: ["GET", "POST"] } });
+    expect(risks[0]?.consequence).not.toMatch(/permanently delete/i);
   });
 
   it("flags state-changing explorer actions", () => {

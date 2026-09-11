@@ -1,6 +1,6 @@
 {
   "name": "@browserrecon/cli",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "browserrecon command-line interface",
   "license": "Apache-2.0",
@@ -18,8 +18,17 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@browserrecon/core": "workspace:*",
     "@browserrecon/config": "workspace:*",
-    "@browserrecon/policy": "workspace:*"
-  }
+    "@browserrecon/core": "workspace:*",
+    "@browserrecon/policy": "workspace:*",
+    "commander": "^15.0.0",
+    "@browserrecon/events": "workspace:*"
+  },
+  "bin": {
+    "browserrecon": "./bin/browserrecon.js"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ]
 }

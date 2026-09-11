@@ -1,0 +1,46 @@
+# gitleaks configuration.
+#
+# Extends the default ruleset rather than replacing it — this file only adds
+# narrow exceptions, so every built-in rule still applies everywhere.
+#
+# ## Why any exception exists
+#
+# The redaction engine's tests must contain strings that look exactly like real
+# credentials. That is the point of them: a fixture that does not match a
+# secret pattern cannot prove the redactor catches that pattern. Without an
+# exception, the secret scanner and the secret-redaction tests are permanently
+# in conflict.
+#
+# ## Why this allowlists values and not files
+#
+# The obvious fix — exempting the test files — was tried and rejected after
+# probing it: planting a realistic `sk_live_` key in an allowlisted file went
+# undetected, because a `paths` entry exempts the whole file no matter what
+# else the allowlist says. That is precisely the blanket exemption that makes a
+# genuine credential pasted into a test invisible.
+#
+# So the allowlist matches only *values that cannot be real*: sequential
+# alphabet filler, and two published example credentials. Those strings appear
+# in no real key, so this stays safe wherever it applies — and a real secret in
+# these same test files is still caught.
+#
+# Verified by probe: adding `sk_live_51QwErTyUiOpAsDfGhJkLzXcVbN` to a
+# redaction test is detected, while the fixtures below are not.
+
+title = "BrowserRecon"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fabricated credential fixtures, matched by value rather than by file"
+
+regexes = [
+  # Sequential-alphabet filler, in full and truncated forms. No real key
+  # contains ten consecutive letters of the alphabet.
+  '''abcdefghij''',
+  # AWS's own documented example access key.
+  '''AKIAIOSFODNN7EXAMPLE''',
+  # The jwt.io sample token, used to test JWT detection.
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.''',
+]
