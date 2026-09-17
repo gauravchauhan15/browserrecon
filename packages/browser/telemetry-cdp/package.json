@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@browserrecon/browser-manager": "workspace:*",
+    "@browserrecon/collector-network": "workspace:*",
     "@browserrecon/fixtures": "workspace:*"
   }
 }

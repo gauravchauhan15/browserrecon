@@ -27,7 +27,14 @@
  */
 import type { FixtureApp, FixtureResponse, FixtureState } from "../types.js";
 
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
+const JSON_HEADERS = {
+  "content-type": "application/json; charset=utf-8",
+  // A wide-open CORS policy, on purpose and for two reasons. It is what lets a
+  // page on one origin call this API at all, which is how a real single-page
+  // application is deployed — and a permissive `*` is itself attack surface a
+  // recon tool ought to notice, so the fixture should present one to notice.
+  "access-control-allow-origin": "*",
+} as const;
 
 /** Pretty-printed with a trailing newline, so a diff of two runs is readable. */
 function json(status: number, value: unknown): FixtureResponse {

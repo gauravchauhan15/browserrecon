@@ -18,6 +18,9 @@
       "path": "./packages/browser/telemetry-cdp"
     },
     {
+      "path": "./packages/collectors/network"
+    },
+    {
       "path": "./packages/config"
     },
     {

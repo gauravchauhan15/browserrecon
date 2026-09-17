@@ -214,9 +214,21 @@ importers:
       '@browserrecon/browser-manager':
         specifier: workspace:*
         version: link:../manager
+      '@browserrecon/collector-network':
+        specifier: workspace:*
+        version: link:../../collectors/network
       '@browserrecon/fixtures':
         specifier: workspace:*
         version: link:../../fixtures
+
+  packages/collectors/network:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
 
   packages/config:
     dependencies:
