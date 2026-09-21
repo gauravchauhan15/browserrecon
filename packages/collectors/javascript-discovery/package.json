@@ -2,7 +2,7 @@
   "name": "@browserrecon/collector-javascript-discovery",
   "version": "0.0.0",
   "private": true,
-  "description": "JS asset inventory: what was loaded, hashed and deduplicated — no parsing",
+  "description": "JS asset inventory: what was loaded, hashed and deduplicated \u2014 no parsing",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@browserrecon/core": "workspace:*",
-    "@browserrecon/events": "workspace:*"
+    "@browserrecon/events": "workspace:*",
+    "tree-sitter": "^0.25.0",
+    "tree-sitter-javascript": "^0.25.0"
   }
 }

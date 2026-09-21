@@ -28,6 +28,31 @@ import type { EventBus, EventEnvelope, Unsubscribe } from "@browserrecon/events"
 
 export const PACKAGE_NAME = "@browserrecon/collector-javascript-discovery" as const;
 
+export { ORIGIN_KINDS, REQUEST_LIBRARIES } from "./analyzer.js";
+export type {
+  AnalysisResult,
+  AnalyzeInput,
+  ApiCandidate,
+  CandidateConfidence,
+  ConfigCandidate,
+  JSAnalyzer,
+  OriginCandidate,
+  OriginKind,
+  RequestLibrary,
+  RequestPattern,
+  RouteCandidate,
+  SourceLocation,
+  UrlCandidate,
+} from "./analyzer.js";
+
+export {
+  DEFAULT_TIME_BUDGET_MS,
+  TREE_SITTER_RULE_VERSION,
+  createTreeSitterAnalyzer,
+  locateOffset,
+} from "./tree-sitter-analyzer.js";
+export type { TreeSitterAnalyzerOptions } from "./tree-sitter-analyzer.js";
+
 export interface ScriptAsset {
   /** Empty for an inline script, which is exactly the interesting case. */
   readonly url: string;

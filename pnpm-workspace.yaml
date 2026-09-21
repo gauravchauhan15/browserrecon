@@ -11,5 +11,15 @@ packages:
 # supply-chain decision, so it belongs in a diff.
 #
 #   esbuild — links its platform-native binary on install; required by Vitest.
+#
+#   tree-sitter, tree-sitter-javascript — run `node-gyp-build`, which SELECTS
+#   an already-compiled binary from the package's own `prebuilds/` directory
+#   for this platform. It compiles nothing on any platform this tool targets
+#   (darwin/linux/win32 x arm64/x64 are all prebuilt); node-gyp is the
+#   fallback for an exotic one. Both MIT. See
+#   docs/architecture/js-analysis-spike.md for why the parser is a native
+#   addon at all.
 allowBuilds:
   esbuild: true
+  tree-sitter: true
+  tree-sitter-javascript: true
