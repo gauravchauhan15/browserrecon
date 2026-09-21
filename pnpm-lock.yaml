@@ -180,6 +180,24 @@ importers:
         specifier: workspace:*
         version: link:../../fixtures
 
+  packages/browser/deterministic-explorer:
+    dependencies:
+      '@browserrecon/browser-adapter':
+        specifier: workspace:*
+        version: link:../adapter
+      '@browserrecon/collector-dom':
+        specifier: workspace:*
+        version: link:../../collectors/dom
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+      '@browserrecon/policy':
+        specifier: workspace:*
+        version: link:../../policy
+
   packages/browser/manager:
     dependencies:
       '@browserrecon/core':

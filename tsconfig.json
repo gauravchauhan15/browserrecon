@@ -12,6 +12,9 @@
       "path": "./packages/browser/adapter"
     },
     {
+      "path": "./packages/browser/deterministic-explorer"
+    },
+    {
       "path": "./packages/browser/manager"
     },
     {
