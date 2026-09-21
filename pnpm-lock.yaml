@@ -278,6 +278,15 @@ importers:
         specifier: workspace:*
         version: link:../../events
 
+  packages/collectors/javascript-discovery:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+
   packages/collectors/navigation:
     dependencies:
       '@browserrecon/core':
@@ -305,6 +314,15 @@ importers:
         specifier: workspace:*
         version: link:../../events
 
+  packages/collectors/webmcp:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+
   packages/config:
     dependencies:
       '@browserrecon/core':
@@ -315,6 +333,15 @@ importers:
         version: 2.9.0
 
   packages/core: {}
+
+  packages/correlation:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../events
 
   packages/discovery/external:
     dependencies:

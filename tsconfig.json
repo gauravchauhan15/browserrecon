@@ -30,6 +30,9 @@
       "path": "./packages/collectors/interaction"
     },
     {
+      "path": "./packages/collectors/javascript-discovery"
+    },
+    {
       "path": "./packages/collectors/navigation"
     },
     {
@@ -39,10 +42,16 @@
       "path": "./packages/collectors/storage"
     },
     {
+      "path": "./packages/collectors/webmcp"
+    },
+    {
       "path": "./packages/config"
     },
     {
       "path": "./packages/core"
+    },
+    {
+      "path": "./packages/correlation"
     },
     {
       "path": "./packages/discovery/external"
