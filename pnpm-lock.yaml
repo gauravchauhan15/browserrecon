@@ -316,6 +316,42 @@ importers:
 
   packages/core: {}
 
+  packages/discovery/external:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+      '@browserrecon/policy':
+        specifier: workspace:*
+        version: link:../../policy
+
+  packages/discovery/katana:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+      '@browserrecon/policy':
+        specifier: workspace:*
+        version: link:../../policy
+
+  packages/discovery/normalization:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+      '@browserrecon/policy':
+        specifier: workspace:*
+        version: link:../../policy
+
   packages/event-store:
     dependencies:
       '@browserrecon/core':

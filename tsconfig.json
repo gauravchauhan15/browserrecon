@@ -45,6 +45,15 @@
       "path": "./packages/core"
     },
     {
+      "path": "./packages/discovery/external"
+    },
+    {
+      "path": "./packages/discovery/katana"
+    },
+    {
+      "path": "./packages/discovery/normalization"
+    },
+    {
       "path": "./packages/event-store"
     },
     {
