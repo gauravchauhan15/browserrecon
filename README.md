@@ -4,10 +4,7 @@
 > story from a written plan. Nothing here is usable yet; there is no release to
 > install. Follow the issues to track progress.
 
-Browser runtime recon — captures how an application actually behaves in a real
-browser and turns it into a structured attack-surface model for DAST, API
-scanners and CI pipelines. Cross-workflow relationships, multi-step API
-sequences, state transitions and JS-mined endpoints. Local-first, no telemetry.
+Browser runtime recon is an Agent/Application Attack Surface Discovery which map AI features, APIs, WebMCP/tools, workflows and state transitions exposed by an application. identify Cross-workflow relationships, multi-step API sequences, state transitions and JS-mined endpoints. Local-first, no telemetry.
 
 ---
 
