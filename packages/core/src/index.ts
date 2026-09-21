@@ -23,4 +23,15 @@ export type {
 } from "./logger.js";
 
 export { REDACTED, Redactor, createRedactor } from "./redaction.js";
+
+export {
+  BOUNDARY_RULES,
+  OUTPUT_BOUNDARIES,
+  OUTPUT_DIR_MODE,
+  UNREDACTED_OUTPUT_WARNING,
+  createSecureOutputDir,
+  mayOptOut,
+  requiresRedaction,
+} from "./boundaries.js";
+export type { BoundaryRule, OutputBoundary } from "./boundaries.js";
 export type { RedactorOptions } from "./redaction.js";

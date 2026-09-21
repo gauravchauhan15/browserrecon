@@ -8,6 +8,9 @@
   "exclude": ["src/**/*.test.ts"],
   "references": [
     {
+      "path": "../../apps/cli"
+    },
+    {
       "path": "../../packages/core"
     },
     {
@@ -15,6 +18,12 @@
     },
     {
       "path": "../../packages/events"
+    },
+    {
+      "path": "../../packages/exporters/json"
+    },
+    {
+      "path": "../../packages/exporters/markdown"
     },
     {
       "path": "../../packages/fixtures"

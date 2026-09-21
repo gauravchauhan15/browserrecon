@@ -18,3 +18,12 @@ export { CliError, EXIT_CODES, EXIT_CODE_DESCRIPTIONS } from "./exit-codes.js";
 export type { ExitCode } from "./exit-codes.js";
 
 export { addSpecOptions, collectCliValues } from "./options.js";
+
+export {
+  TERMINAL_WIDTH,
+  formatSummary,
+  renderSummary,
+  resolveSummaryMode,
+  summaryAsJson,
+} from "./commands/summary.js";
+export type { ScanSummary, SummaryMode } from "./commands/summary.js";

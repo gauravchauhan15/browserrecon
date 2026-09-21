@@ -394,6 +394,24 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/exporters/json:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+
+  packages/exporters/markdown:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+
   packages/fixtures:
     dependencies:
       '@browserrecon/test-utils':
@@ -425,6 +443,9 @@ importers:
 
   tests/golden:
     dependencies:
+      '@browserrecon/cli':
+        specifier: workspace:*
+        version: link:../../apps/cli
       '@browserrecon/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -434,6 +455,12 @@ importers:
       '@browserrecon/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@browserrecon/exporter-json':
+        specifier: workspace:*
+        version: link:../../packages/exporters/json
+      '@browserrecon/exporter-markdown':
+        specifier: workspace:*
+        version: link:../../packages/exporters/markdown
       '@browserrecon/fixtures':
         specifier: workspace:*
         version: link:../../packages/fixtures

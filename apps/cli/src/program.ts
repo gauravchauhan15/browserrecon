@@ -67,6 +67,7 @@ export function buildProgram(io: ProgramIo, argv: readonly string[] = []): Comma
     .version(io.version, "-v, --version", "print the version and exit")
     .option("-c, --config <path>", "configuration file (YAML or JSON)")
     .option("-q, --quiet", "suppress the end-of-scan summary")
+    .option("--json", "print the end-of-scan summary as JSON instead of text")
     .option(
       "--i-am-authorized",
       "assert you are permitted to test the target; required in CI, where there is no terminal to ask in",

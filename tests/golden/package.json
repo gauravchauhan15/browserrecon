@@ -18,9 +18,12 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
+    "@browserrecon/cli": "workspace:*",
     "@browserrecon/core": "workspace:*",
     "@browserrecon/event-store": "workspace:*",
     "@browserrecon/events": "workspace:*",
+    "@browserrecon/exporter-json": "workspace:*",
+    "@browserrecon/exporter-markdown": "workspace:*",
     "@browserrecon/fixtures": "workspace:*"
   }
 }

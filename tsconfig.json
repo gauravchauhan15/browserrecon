@@ -69,6 +69,12 @@
       "path": "./packages/events"
     },
     {
+      "path": "./packages/exporters/json"
+    },
+    {
+      "path": "./packages/exporters/markdown"
+    },
+    {
       "path": "./packages/fixtures"
     },
     {

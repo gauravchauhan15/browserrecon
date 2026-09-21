@@ -1,0 +1,191 @@
+# Golden baseline. Regenerate with: pnpm test:golden:update
+#
+# Masked below. A change in these counts is a change in how much this
+# baseline is NOT asserting, and is as reviewable as a change in content.
+#   (nothing masked)
+===== terminal summary =====
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BrowserRecon — https://shop.example.com
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Scan                      partial (max_pages) · 184s · normal
+  Discovery                 browser
+  AI                        off
+
+  Observed
+    Pages visited           24 of 61 discovered
+    Templates saturated     3 (118 instances skipped as equivalent)
+    Workflows               4
+    APIs                    18 observed, 7 discovered but not reached
+    Origins                 5
+    JS assets               11
+
+  Barriers
+    auth_wall               3
+    rate_limit              1
+  None was bypassed.
+
+  Why coverage stopped where it did
+    auth_required           14
+    excluded_by_policy      9
+    budget_exhausted        7
+
+  Artifacts
+    .output/sess_0001/report.md
+    .output/sess_0001/attack-surface.json
+    .output/sess_0001/events.jsonl
+
+  .output/sess_0001 holds UNREDACTED captured data.
+  Do not commit it, attach it to a ticket, or sync it to cloud storage.
+
+  Next: Stopped early (max_pages). Pick up where it left off:
+
+      browserrecon resume sess_0001
+
+  Coverage is scoped by policy, authentication and budget. This is what was
+  reachable and observed, not everything that exists.
+────────────────────────────────────────────────────────────────────────────────
+===== terminal summary (--json) =====
+{
+  "target": "https://shop.example.com",
+  "sessionId": "sess_0001",
+  "durationSeconds": 184,
+  "completeness": "partial",
+  "stopReason": "max_pages",
+  "pagesVisited": 24,
+  "candidatesDiscovered": 61,
+  "templatesSaturated": 3,
+  "instancesSkipped": 118,
+  "workflows": 4,
+  "apisObserved": 18,
+  "apisUnobserved": 7,
+  "origins": 5,
+  "jsAssets": 11,
+  "barriers": [
+    {
+      "category": "auth_wall",
+      "count": 3
+    },
+    {
+      "category": "rate_limit",
+      "count": 1
+    }
+  ],
+  "topGaps": [
+    {
+      "reason": "auth_required",
+      "count": 14
+    },
+    {
+      "reason": "excluded_by_policy",
+      "count": 9
+    },
+    {
+      "reason": "budget_exhausted",
+      "count": 7
+    }
+  ],
+  "discoverySources": [
+    "browser"
+  ],
+  "aiMode": "off",
+  "rateProfile": "normal",
+  "artifacts": [
+    ".output/sess_0001/report.md",
+    ".output/sess_0001/attack-surface.json",
+    ".output/sess_0001/events.jsonl"
+  ],
+  "outputDir": ".output/sess_0001"
+}
+===== report.md =====
+# BrowserRecon report — https://shop.example.com
+
+| Field | Value |
+| --- | --- |
+| Session | sess_0001 |
+| Schema version | 1.0.0 |
+| Duration | 184s |
+| Rate profile | normal |
+| Allowed methods | GET, HEAD, OPTIONS |
+| Discovery sources | browser |
+| Auth state | anonymous |
+| AI mode | off |
+
+> Coverage below is scoped by the Target Policy, the authentication state and
+> the scan budget. It describes what was reachable and observed — not
+> everything that exists.
+
+## 1. Coverage summary
+
+| Dimension | Observed | Discovered | Ratio |
+| --- | --- | --- | --- |
+| Pages | 24 | 61 | 39% |
+| APIs | 18 | 25 | 72% |
+| Origins | 5 | 5 | 100% |
+
+## 2. Workflows
+
+**Add to cart** (`wf_0001`, confidence 0.86)
+
+| Step | Kind | Detail | caused_by |
+| --- | --- | --- | --- |
+| 1 | interaction | click #add-to-cart | evt_000041 |
+| 2 | request | POST /api/cart | evt_000042 |
+| ↳ parallel | request | GET /api/cart/count | — |
+
+<details><summary>Unnamed sequence — low confidence (0.34)</summary>
+
+**Unnamed sequence** (`wf_0002`, confidence 0.34)
+
+| Step | Kind | Detail | caused_by |
+| --- | --- | --- | --- |
+| 1 | navigation | pushState /checkout | — |
+
+</details>
+
+## 3. API inventory
+
+| Method | URL | Status | Role |
+| --- | --- | --- | --- |
+| GET | `https://shop.example.com/api/products` | 200 | consumer |
+| POST | `https://shop.example.com/api/cart` | 201 | consumer |
+| GET | `https://shop.example.com/api/session` | 401 | auth |
+
+## 4. Origins
+
+| Origin | Requests | Classification |
+| --- | --- | --- |
+| `https://shop.example.com` | 84 | first_party |
+| `https://cdn.example.net` | 12 | third_party_cdn |
+
+## 5. JavaScript
+
+| Script | Size | Party | Analysis |
+| --- | --- | --- | --- |
+| `https://shop.example.com/app.js` | 47 KB | first | 3 endpoints |
+| `(inline)` | — | first | inline bootstrap |
+
+## 6. Access barriers
+
+| Category | URL | Evidence |
+| --- | --- | --- |
+| auth_wall | `https://shop.example.com/account` | evt_000103 |
+
+_No barrier was bypassed. Barriers are recorded, never circumvented._
+
+## 7. Coverage gaps
+
+| Reason | Count | Remedy |
+| --- | --- | --- |
+| auth_required | 14 | Configure an auth profile and re-run. |
+| excluded_by_policy | 9 | Widen --allowed-paths if intended. |
+
+## 8. Artifacts
+
+| File | Contents | Records |
+| --- | --- | --- |
+| `.output/sess_0001/events.jsonl` | raw observations | 1420 |
+| `.output/sess_0001/attack-surface.json` | derived model | — |
+
+> .output/ contains UNREDACTED captured data — cookies, tokens, authorization headers and request bodies. Do not commit it, attach it to a ticket, or sync it to cloud storage.

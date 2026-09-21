@@ -1,0 +1,105 @@
+# Golden baseline. Regenerate with: pnpm test:golden:update
+#
+# Masked below. A change in these counts is a change in how much this
+# baseline is NOT asserting, and is as reviewable as a change in content.
+#   (nothing masked)
+===== terminal summary =====
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BrowserRecon — https://locked.example.com
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Scan                      complete · 6s · polite
+  Discovery                 browser
+  AI                        off
+
+  Observed
+    Pages visited           1 of 1 discovered
+    Workflows               0
+    APIs                    0 observed, 0 discovered but not reached
+    Origins                 1
+    JS assets               0
+
+  Barriers
+    auth_wall               1
+  None was bypassed.
+
+  Why coverage stopped where it did
+    auth_required           1
+
+  Artifacts
+    .output/sess_0002/report.md
+
+  .output/sess_0002 holds UNREDACTED captured data.
+  Do not commit it, attach it to a ticket, or sync it to cloud storage.
+
+  Next: 1 target needed authentication. Sign in first to see past it:
+
+      browserrecon auth validate <profile>
+
+  Coverage is scoped by policy, authentication and budget. This is what was
+  reachable and observed, not everything that exists.
+────────────────────────────────────────────────────────────────────────────────
+===== report.md =====
+# BrowserRecon report — https://locked.example.com
+
+| Field | Value |
+| --- | --- |
+| Session | sess_0002 |
+| Schema version | 1.0.0 |
+| Duration | 6s |
+| Rate profile | polite |
+| Allowed methods | GET, HEAD, OPTIONS |
+| Discovery sources | browser |
+| Auth state | anonymous |
+| AI mode | off |
+
+> Coverage below is scoped by the Target Policy, the authentication state and
+> the scan budget. It describes what was reachable and observed — not
+> everything that exists.
+
+## 1. Coverage summary
+
+| Dimension | Observed | Discovered | Ratio |
+| --- | --- | --- | --- |
+| Pages | 1 | 1 | 100% |
+
+## 2. Workflows
+
+_No workflows were detected._
+
+## 3. API inventory
+
+_None._
+
+## 4. Origins
+
+| Origin | Requests | Classification |
+| --- | --- | --- |
+| `https://locked.example.com` | 2 | first_party |
+
+## 5. JavaScript
+
+_None._
+
+## 6. Access barriers
+
+| Category | URL | Evidence |
+| --- | --- | --- |
+| auth_wall | `https://locked.example.com/` | evt_000002 |
+
+_No barrier was bypassed. Barriers are recorded, never circumvented._
+
+## 7. Coverage gaps
+
+| Reason | Count | Remedy |
+| --- | --- | --- |
+| auth_required | 1 | Configure an auth profile and re-run. |
+
+## 8. Artifacts
+
+| File | Contents | Records |
+| --- | --- | --- |
+| `.output/sess_0002/events.jsonl` | raw observations | 9 |
+
+> .output/ contains UNREDACTED captured data — cookies, tokens, authorization headers and request bodies. Do not commit it, attach it to a ticket, or sync it to cloud storage.
