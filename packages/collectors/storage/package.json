@@ -1,0 +1,24 @@
+{
+  "name": "@browserrecon/collector-storage",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cookie and storage metadata, values only under explicit policy",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@browserrecon/core": "workspace:*",
+    "@browserrecon/events": "workspace:*"
+  }
+}

@@ -230,6 +230,24 @@ importers:
         specifier: workspace:*
         version: link:../../fixtures
 
+  packages/collectors/console:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+
+  packages/collectors/dom:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+
   packages/collectors/interaction:
     dependencies:
       '@browserrecon/browser-adapter':
@@ -252,6 +270,15 @@ importers:
         version: link:../../events
 
   packages/collectors/network:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+
+  packages/collectors/storage:
     dependencies:
       '@browserrecon/core':
         specifier: workspace:*
