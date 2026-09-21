@@ -25,9 +25,11 @@ data, never circumvented.
 
 ## What it is
 
-A crawler answers _"what URLs exist?"_. BrowserRecon answers _"what does this
-application actually do when a real browser executes it, and how are its APIs,
-workflows and state connected?"_
+BrowserRecon is an Agentic Application Attack Surface layer that maps: Agent → Page → WebMCP/Tool → API → Workflow → State → Business Action
+
+The idea is to bring application-layer intelligence from browser/runtime signals — including AI surfaces, WebMCP tools, agent-accessible APIs, high-impact actions, workflow/state dependencies, and paths such as:
+
+Web content → Agent context → Tool/Action → External side effect
 
 It observes a live Chrome session at the protocol level and correlates what it
 sees into an application model:
