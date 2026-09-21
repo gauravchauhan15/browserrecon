@@ -28,6 +28,7 @@ export type {
 export { staticSite } from "./apps/static-site.js";
 export { restApi } from "./apps/rest-api.js";
 export { framedSite } from "./apps/framed-site.js";
+export { spaSite } from "./apps/spa-site.js";
 export { WS_CLIENT_MESSAGES, WS_GREETING, realtimeSite } from "./apps/realtime-site.js";
 
 export { OPCODES, decodeFrame, encodeFrame, handshakeAccept } from "./websocket.js";
@@ -35,6 +36,7 @@ export type { FixtureSocket, WebSocketRoute } from "./websocket.js";
 
 import { framedSite } from "./apps/framed-site.js";
 import { realtimeSite } from "./apps/realtime-site.js";
+import { spaSite } from "./apps/spa-site.js";
 import { restApi } from "./apps/rest-api.js";
 import { staticSite } from "./apps/static-site.js";
 import type { FixtureApp } from "./types.js";
@@ -53,4 +55,5 @@ export const ALL_FIXTURE_APPS: readonly (() => FixtureApp)[] = [
   restApi,
   framedSite,
   realtimeSite,
+  spaSite,
 ];

@@ -124,6 +124,20 @@ export interface FrameRequestedNavigation {
   readonly reason?: string;
 }
 
+export interface NavigatedWithinDocument {
+  readonly frameId: string;
+  readonly url: string;
+  /**
+   * Chrome's own label: `historyApi`, `fragment`, or `other`.
+   *
+   * Recorded but NOT trusted to mean what it says. Measured: a back/forward
+   * traversal that changes the path is reported as `fragment`, and pushState
+   * and replaceState are both `historyApi`. The Navigation API read below is
+   * what the subtype is actually derived from.
+   */
+  readonly navigationType?: string;
+}
+
 export interface LifecycleEvent {
   readonly frameId: string;
   readonly loaderId?: string;

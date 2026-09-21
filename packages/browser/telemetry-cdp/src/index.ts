@@ -52,6 +52,7 @@ export type {
   NavigationStartedPayload,
   PageLoadedPayload,
   ScriptParsedPayload,
+  SoftNavigationPayload,
 } from "./page-types.js";
 
 export type {

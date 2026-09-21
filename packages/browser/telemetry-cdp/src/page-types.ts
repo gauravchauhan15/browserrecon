@@ -43,6 +43,16 @@ export interface NavigationCommittedPayload extends FrameRef {
    * later stage notice that a navigation left the origin it was aimed at.
    */
   readonly redirectedFrom?: string | undefined;
+  /**
+   * The session-history position the new document commits at.
+   *
+   * Read for the same reason as on a soft navigation, and needed here because
+   * the *first* route change of a document has nothing else to compare
+   * against — and a document load does not reset the entry count, so the
+   * baseline cannot be assumed.
+   */
+  readonly historyIndex?: number | undefined;
+  readonly historyLength?: number | undefined;
   readonly targetId: string;
 }
 
@@ -89,5 +99,35 @@ export interface ScriptParsedPayload {
   readonly isModule?: boolean | undefined;
   /** True when the script has no URL of its own. */
   readonly inline: boolean;
+  readonly targetId: string;
+}
+
+/**
+ * A navigation that changed the URL without loading a document.
+ *
+ * The raw observation only. Working out whether it was a push, a replace, a
+ * hash change or a history traversal is derivation, and belongs to the
+ * navigation collector (BR-M1-07) — but the *evidence* for that derivation has
+ * to be captured here, at the moment it happened, because the browser's
+ * history state is a moving target that cannot be reconstructed afterwards.
+ */
+export interface SoftNavigationPayload extends FrameRef {
+  readonly url: string;
+  /** Chrome's label. Recorded, not trusted — see cdp-shapes.ts. */
+  readonly cdpNavigationType?: string | undefined;
+  /**
+   * `navigation.currentEntry.index` at the moment of the change.
+   *
+   * Read from the Navigation API rather than inferred, and read rather than
+   * hooked: instrumenting `history.pushState` would work too, but it modifies
+   * the page a scan is supposed to be observing, and a site can see the
+   * difference. This is a plain property read.
+   *
+   * Absent where the Navigation API is unavailable — a sandboxed frame, or a
+   * Chrome too old — in which case the subtype falls back to what CDP says.
+   */
+  readonly historyIndex?: number | undefined;
+  /** `navigation.entries().length` at the same moment. */
+  readonly historyLength?: number | undefined;
   readonly targetId: string;
 }

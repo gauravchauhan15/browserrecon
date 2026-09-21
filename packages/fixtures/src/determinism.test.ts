@@ -70,6 +70,13 @@ const PROBE_PATHS: Readonly<Record<string, readonly [string, string][]>> = {
     // fixture. Its content is asserted directly in the telemetry tests.
     ["GET", "/nowhere"],
   ],
+  "spa-site": [
+    ["GET", "/"],
+    ["GET", "/app/orders"],
+    ["GET", "/app/auto"],
+    ["GET", "/api/orders"],
+    ["GET", "/second"],
+  ],
   "rest-api": [
     ["GET", "/api/v1/products"],
     ["GET", "/api/v1/products/2"],

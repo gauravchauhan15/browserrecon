@@ -35,6 +35,7 @@ import type {
   FrameNavigated,
   FrameRequestedNavigation,
   LifecycleEvent,
+  NavigatedWithinDocument,
   ScriptParsed,
 } from "./cdp-shapes.js";
 import type {
@@ -43,7 +44,42 @@ import type {
   NavigationStartedPayload,
   PageLoadedPayload,
   ScriptParsedPayload,
+  SoftNavigationPayload,
 } from "./page-types.js";
+
+/**
+ * Where the page sits in its own session history.
+ *
+ * A read, not a hook. Wrapping `history.pushState` would also work and would
+ * report the call directly — but it modifies the page a scan is supposed to be
+ * observing, and a site can tell the difference. Reading two properties
+ * changes nothing, and the index/length pair is enough to separate a push from
+ * a replace from a traversal (BR-M1-07).
+ */
+async function readHistoryPosition(
+  cdp: CDPSession,
+): Promise<{ index?: number | undefined; length?: number | undefined }> {
+  try {
+    const result = (await cdp.send("Runtime.evaluate", {
+      expression:
+        "typeof navigation === 'object' && navigation !== null" +
+        " ? [navigation.currentEntry ? navigation.currentEntry.index : -1, navigation.entries().length]" +
+        " : null",
+      returnByValue: true,
+      // A property read cannot need long, and a page that has wedged its main
+      // thread must not wedge telemetry with it.
+      timeout: 1000,
+    })) as { result?: { value?: [number, number] | null } };
+
+    const value = result.result?.value;
+    if (value === null || value === undefined) return {};
+    return { index: value[0], length: value[1] };
+  } catch {
+    // No Navigation API, a detached frame, or a busy main thread. The
+    // collector falls back to Chrome's own label, which is worse but present.
+    return {};
+  }
+}
 
 /** What is known about a frame while it exists. */
 interface FrameState {
@@ -200,6 +236,17 @@ export function wirePageDomain(
     frame.navigationStarted = undefined;
     frame.url = event.frame.url;
 
+    // Read the history position on commit as well as on a soft navigation.
+    //
+    // Without it the *first* route change of every document has nothing to
+    // compare against and falls back to Chrome's label — which cannot tell a
+    // push from a replace. Measured: the first pushState after a load came
+    // back as `cdp_label` while every later one was `navigation_api`.
+    //
+    // A fresh document does not reset the entry count either, so the baseline
+    // cannot be assumed: navigating from /a to /b leaves two entries, not one.
+    const committedHistory = readHistoryPosition(cdp);
+
     const payload: NavigationCommittedPayload = {
       navigationId,
       frameId: event.frame.id,
@@ -219,8 +266,51 @@ export function wirePageDomain(
       targetId,
     };
     ctx.enqueue(async () => {
-      ctx.emit("navigation_committed", payload, { navigation_id: navigationId });
-      await Promise.resolve();
+      const history = await committedHistory;
+      ctx.emit(
+        "navigation_committed",
+        {
+          ...payload,
+          ...(history.index === undefined ? {} : { historyIndex: history.index }),
+          ...(history.length === undefined ? {} : { historyLength: history.length }),
+        },
+        { navigation_id: navigationId },
+      );
+    });
+  });
+
+  cdp.on("Page.navigatedWithinDocument", (raw: unknown) => {
+    ctx.touch();
+    const event = raw as NavigatedWithinDocument;
+    const frame = frameOf(event.frameId);
+    // The previous URL is the collector's `from`; it keeps the frame map, so
+    // nothing needs to be carried on the event itself.
+    frame.url = event.url;
+
+    ctx.enqueue(async () => {
+      // Read the Navigation API inside the queued emission, so the read
+      // happens in the same order the events did. Chrome's own
+      // `navigationType` cannot be trusted here — a traversal that changes
+      // the path is reported as `fragment` — so the index and length are what
+      // the collector derives push/replace/traverse from.
+      const history = await readHistoryPosition(cdp);
+
+      const payload: SoftNavigationPayload = {
+        frameId: event.frameId,
+        ...(frame.parentFrameId === undefined ? {} : { parentFrameId: frame.parentFrameId }),
+        isMainFrame: isMain(event.frameId),
+        url: event.url,
+
+        ...(event.navigationType === undefined
+          ? {}
+          : { cdpNavigationType: event.navigationType }),
+        ...(history.index === undefined ? {} : { historyIndex: history.index }),
+        ...(history.length === undefined ? {} : { historyLength: history.length }),
+        targetId,
+      };
+      ctx.emit("soft_navigation", payload, {
+        ...(frame.navigationId === undefined ? {} : { navigation_id: frame.navigationId }),
+      });
     });
   });
 
