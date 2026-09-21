@@ -179,6 +179,21 @@ importers:
         specifier: ^15.0.0
         version: 15.0.0
 
+  packages/api-model:
+    dependencies:
+      '@browserrecon/collector-network':
+        specifier: workspace:*
+        version: link:../collectors/network
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../core
+      '@browserrecon/correlation':
+        specifier: workspace:*
+        version: link:../correlation
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../events
+
   packages/authorization:
     dependencies:
       '@browserrecon/core':
@@ -429,6 +444,9 @@ importers:
 
   packages/discovery/normalization:
     dependencies:
+      '@browserrecon/collector-network':
+        specifier: workspace:*
+        version: link:../../collectors/network
       '@browserrecon/core':
         specifier: workspace:*
         version: link:../../core

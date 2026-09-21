@@ -17,7 +17,7 @@
  * an entry, so "we found 4,000 URLs and observed 300" can be explained rather
  * than asserted.
  */
-import { inferTemplate } from "./template.js";
+import { inferTemplate } from "@browserrecon/collector-network";
 
 export type CandidateStatus = "discovered" | "observed" | "unobserved";
 

@@ -30,6 +30,9 @@ export {
 } from "./url.js";
 export type { NormalizationRule, NormalizedUrl } from "./url.js";
 
+export { PARAMETER_RULES, inferTemplate, sameTemplate } from "./template.js";
+export type { RouteTemplate } from "./template.js";
+
 export { FAILURE_REASONS, classifyFailure } from "./failures.js";
 
 export { BARRIER_CATEGORIES, classifyBarrier, shouldAbortScan } from "./barriers.js";

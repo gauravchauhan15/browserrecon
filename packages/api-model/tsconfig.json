@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts"],
+  "references": [
+    { "path": "../../packages/collectors/network" },
+    { "path": "../../packages/core" },
+    { "path": "../../packages/correlation" },
+    { "path": "../../packages/events" }
+  ]
+}

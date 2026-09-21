@@ -18,6 +18,7 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
+    "@browserrecon/collector-network": "workspace:*",
     "@browserrecon/core": "workspace:*",
     "@browserrecon/events": "workspace:*",
     "@browserrecon/policy": "workspace:*"

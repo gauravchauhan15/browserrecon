@@ -8,6 +8,9 @@
   "exclude": ["src/**/*.test.ts"],
   "references": [
     {
+      "path": "../../../packages/collectors/network"
+    },
+    {
       "path": "../../../packages/core"
     },
     {

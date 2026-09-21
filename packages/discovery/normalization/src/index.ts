@@ -16,8 +16,12 @@ export type {
   SourceSighting,
 } from "./registry.js";
 
-export { PARAMETER_RULES, inferTemplate, sameTemplate } from "./template.js";
-export type { RouteTemplate } from "./template.js";
+// Route templating moved to @browserrecon/collector-network, which already
+// owns "what is this URL, really" (normalization, identity). §1.2 forbids
+// the correlation-rightward packages from importing discovery/*, and
+// api-model needs the same inference — one home beats a second copy.
+export { PARAMETER_RULES, inferTemplate, sameTemplate } from "@browserrecon/collector-network";
+export type { RouteTemplate } from "@browserrecon/collector-network";
 
 export {
   DEFAULT_SATURATION,

@@ -6,6 +6,9 @@
       "path": "./apps/cli"
     },
     {
+      "path": "./packages/api-model"
+    },
+    {
       "path": "./packages/authorization"
     },
     {
