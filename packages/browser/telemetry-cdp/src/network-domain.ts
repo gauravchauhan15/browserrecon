@@ -68,9 +68,22 @@ interface Pending {
 /** In-flight requests, keyed `targetId:requestId` — ids are unique per target. */
 const pending = new Map<string, Pending>();
 
+/**
+ * ExtraInfo that arrived before the request it belongs to.
+ *
+ * `Network.requestWillBeSentExtraInfo` can arrive on either side of
+ * `requestWillBeSent`, and the first version of this dropped it when it came
+ * first — the pending entry did not exist yet, so `pending.get` returned
+ * undefined and the headers Chrome actually sent were silently lost. It
+ * surfaced as an intermittently failing test rather than an obvious bug,
+ * which is the worst way for a dropped-data path to announce itself.
+ */
+const earlyExtraInfo = new Map<string, { request?: Record<string, string> }>();
+
 /** Forget in-flight state. Called on detach so a new attach starts clean. */
 export function resetNetworkState(): void {
   pending.clear();
+  earlyExtraInfo.clear();
 }
 
 async function captureBody(
@@ -143,7 +156,13 @@ export function wireNetworkDomain(
 
     // Keyed per target as well as request id: ids are only unique within a
     // target, and two pages can collide.
-    pending.set(`${targetId}:${event.requestId}`, { request: payload });
+    const key = `${targetId}:${event.requestId}`;
+    const early = earlyExtraInfo.get(key);
+    earlyExtraInfo.delete(key);
+    pending.set(key, {
+      request: payload,
+      ...(early?.request === undefined ? {} : { requestHeadersSent: early.request }),
+    });
     ctx.counters.requests += 1;
 
     ctx.enqueue(async () => {
@@ -155,11 +174,16 @@ export function wireNetworkDomain(
   cdp.on("Network.requestWillBeSentExtraInfo", (raw: unknown) => {
     ctx.touch();
     const event = raw as ExtraInfo;
-    const entry = pending.get(`${targetId}:${event.requestId}`);
-    // Arrives either side of requestWillBeSent. Stored rather than emitted,
-    // and carried on the response event, where it is guaranteed to be
-    // present — emitting a second event for it would double-count requests.
-    if (entry !== undefined) entry.requestHeadersSent = lowerHeaders(event.headers);
+    const key = `${targetId}:${event.requestId}`;
+    const entry = pending.get(key);
+    // Either side of requestWillBeSent, so an early arrival is held rather
+    // than dropped. Stored rather than emitted, and carried on the response
+    // event — emitting a second event for it would double-count requests.
+    if (entry === undefined) {
+      earlyExtraInfo.set(key, { request: lowerHeaders(event.headers) });
+      return;
+    }
+    entry.requestHeadersSent = lowerHeaders(event.headers);
   });
 
   cdp.on("Network.responseReceived", (raw: unknown) => {

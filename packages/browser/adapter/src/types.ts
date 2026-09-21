@@ -25,6 +25,7 @@
  * packages importing the driver directly.
  */
 import type { BarrierCategory, DenialReason } from "@browserrecon/policy";
+import type { ElementFacts } from "./state-changing.js";
 
 /** Actions the adapter can perform. A subset of the policy's permitted set. */
 export const ADAPTER_ACTIONS = ["navigate", "click", "type", "scroll", "back", "wait"] as const;
@@ -110,7 +111,17 @@ export interface BrowserAdapter {
   readonly currentUrl: string;
 
   navigate(url: string, options?: ActionOptions): Promise<ActionResult<NavigationOutcome>>;
-  click(selector: string, options?: ActionOptions): Promise<ActionResult<void>>;
+  /**
+   * Click an element.
+   *
+   * Returns what the element turned out to be. The adapter has to read the
+   * DOM anyway to decide whether the click changes state, and that read
+   * cannot be repeated afterwards — by the time anything else looks, the page
+   * has moved on and the element that was clicked may not exist. So the facts
+   * come back with the result, and the interaction collector (BR-M1-08) turns
+   * them into a stable reference.
+   */
+  click(selector: string, options?: ActionOptions): Promise<ActionResult<ElementFacts>>;
   type(selector: string, text: string, options?: ActionOptions): Promise<ActionResult<void>>;
   scroll(direction: ScrollDirection, options?: ActionOptions): Promise<ActionResult<void>>;
   back(options?: ActionOptions): Promise<ActionResult<NavigationOutcome>>;

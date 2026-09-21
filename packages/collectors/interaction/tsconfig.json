@@ -1,0 +1,20 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts"],
+  "references": [
+    {
+      "path": "../../../packages/core"
+    },
+    {
+      "path": "../../../packages/events"
+    },
+    {
+      "path": "../../browser/adapter"
+    }
+  ]
+}

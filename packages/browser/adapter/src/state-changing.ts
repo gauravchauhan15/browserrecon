@@ -61,6 +61,26 @@ const DESTRUCTIVE_WORDS: readonly string[] = [
   "reset",
 ];
 
+/**
+ * One step up the ancestor chain, as the DOM reports it.
+ *
+ * Captured so a *structural* selector can be built without a second round
+ * trip: by the time anything wants one, the page may have moved on, and an
+ * element read after the fact is not the element that was clicked.
+ */
+export interface AncestorStep {
+  readonly tagName: string;
+  readonly id?: string | undefined;
+  /** Class list, in document order. */
+  readonly classes: readonly string[];
+  /** Position among same-tag siblings, from 1 — what `:nth-of-type` takes. */
+  readonly nthOfType: number;
+  /** True when this element is the only one of its tag among its siblings. */
+  readonly uniqueOfType: boolean;
+  /** `data-testid` and friends, which exist precisely to be stable. */
+  readonly testId?: string | undefined;
+}
+
 /** What the adapter reads off an element before deciding. */
 export interface ElementFacts {
   /** Lower-cased tag name. */
@@ -75,6 +95,22 @@ export interface ElementFacts {
   readonly href?: string | undefined;
   /** Whether the element declares a non-GET method (form or `formmethod`). */
   readonly nonGetMethod: boolean;
+
+  // --- Identity, for the interaction collector (BR-M1-08) -----------------
+  //
+  // Read here rather than derived here. Turning these into a selector is a
+  // pure function over facts, and keeping it out of the browser layer makes
+  // it testable without one — which matters, because "reproducible across
+  // runs" is a property of the derivation, not of the DOM read.
+
+  readonly id?: string | undefined;
+  readonly classes?: readonly string[] | undefined;
+  readonly testId?: string | undefined;
+  /** `name`, which form controls are addressed by. */
+  readonly name?: string | undefined;
+  readonly role?: string | undefined;
+  /** The element and its ancestors, nearest first, up to a bounded depth. */
+  readonly ancestors?: readonly AncestorStep[] | undefined;
 }
 
 export interface StateChangeVerdict {

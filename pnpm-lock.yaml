@@ -211,9 +211,15 @@ importers:
         specifier: ^25.10.0
         version: 25.10.0
     devDependencies:
+      '@browserrecon/browser-adapter':
+        specifier: workspace:*
+        version: link:../adapter
       '@browserrecon/browser-manager':
         specifier: workspace:*
         version: link:../manager
+      '@browserrecon/collector-interaction':
+        specifier: workspace:*
+        version: link:../../collectors/interaction
       '@browserrecon/collector-navigation':
         specifier: workspace:*
         version: link:../../collectors/navigation
@@ -223,6 +229,18 @@ importers:
       '@browserrecon/fixtures':
         specifier: workspace:*
         version: link:../../fixtures
+
+  packages/collectors/interaction:
+    dependencies:
+      '@browserrecon/browser-adapter':
+        specifier: workspace:*
+        version: link:../../browser/adapter
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
 
   packages/collectors/navigation:
     dependencies:

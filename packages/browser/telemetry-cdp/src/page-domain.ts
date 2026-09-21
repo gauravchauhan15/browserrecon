@@ -437,13 +437,15 @@ export async function enablePageDomains(
   options: PageDomainOptions,
   state: PageDomainState,
 ): Promise<void> {
-  await cdp.send("Page.enable");
-
-  // The main frame's identity has to be known *before* the first
-  // `frameStartedLoading`, which reports only a frame id. Inferring it later
-  // from `frameNavigated` is too late: the first navigation of a fresh target
-  // starts loading before anything has told us which frame is the top
-  // document, so every main-frame navigation was being reported as a subframe.
+  // The frame tree is read BEFORE Page.enable, not after.
+  //
+  // `Page.getFrameTree` does not need the domain enabled, and ordering it
+  // first closes a race: with enable first, events could arrive while the
+  // tree request was still in flight, and a navigation that started in that
+  // window was attributed to a frame nobody had yet identified as the main
+  // one. It showed up as an intermittently failing assertion under load —
+  // rare enough to look like flakiness and real enough to mislabel a
+  // navigation in a scan.
   try {
     const tree = (await cdp.send("Page.getFrameTree")) as {
       frameTree: { frame: { id: string; parentId?: string; url?: string } };
@@ -458,6 +460,8 @@ export async function enablePageDomains(
   } catch {
     // A target without a frame tree — a worker — simply has no main frame.
   }
+
+  await cdp.send("Page.enable");
 
   // Lifecycle events are opt-in and are the only reliable source for load and
   // DOMContentLoaded in subframes.

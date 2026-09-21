@@ -135,6 +135,51 @@ function readFacts(element: Element): ElementFacts {
     ""
   ).toLowerCase();
 
+  /** `data-testid` and its common spellings, in the order tools emit them. */
+  const testIdOf = (node: Element): string | undefined => {
+    for (const attribute of [
+      "data-testid",
+      "data-test-id",
+      "data-test",
+      "data-cy",
+      "data-qa",
+    ]) {
+      const value = node.getAttribute(attribute);
+      if (value !== null && value !== "") return value;
+    }
+    return undefined;
+  };
+
+  const step = (node: Element): Record<string, unknown> => {
+    const siblings =
+      node.parentElement === null ? [node] : Array.from(node.parentElement.children);
+    const sameTag = siblings.filter((sibling) => sibling.tagName === node.tagName);
+    const id = node.getAttribute("id");
+    const testId = testIdOf(node);
+    return {
+      tagName: node.tagName.toLowerCase(),
+      ...(id === null || id === "" ? {} : { id }),
+      classes: Array.from(node.classList),
+      nthOfType: sameTag.indexOf(node) + 1,
+      uniqueOfType: sameTag.length === 1,
+      ...(testId === undefined ? {} : { testId }),
+    };
+  };
+
+  // Bounded at eight: deep enough to reach a stable ancestor in any real
+  // layout, shallow enough that a deeply nested component does not produce a
+  // selector nobody can read.
+  const ancestors: Record<string, unknown>[] = [];
+  let current: Element | null = element;
+  while (current !== null && ancestors.length < 8 && current.tagName !== "HTML") {
+    ancestors.push(step(current));
+    current = current.parentElement;
+  }
+
+  const id = element.getAttribute("id");
+  const name = element.getAttribute("name");
+  const role = element.getAttribute("role");
+
   return {
     tagName: element.tagName.toLowerCase(),
     type: element.getAttribute("type") ?? undefined,
@@ -150,6 +195,12 @@ function readFacts(element: Element): ElementFacts {
     inForm: form !== null,
     href: element.getAttribute("href") ?? undefined,
     nonGetMethod: ["post", "put", "delete", "patch"].includes(method),
+    ...(id === null || id === "" ? {} : { id }),
+    classes: Array.from(element.classList),
+    ...(testIdOf(element) === undefined ? {} : { testId: testIdOf(element) }),
+    ...(name === null || name === "" ? {} : { name }),
+    ...(role === null || role === "" ? {} : { role }),
+    ancestors: ancestors as unknown as ElementFacts["ancestors"],
   };
 }
 
@@ -248,7 +299,10 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
     }
   }
 
-  async click(selector: string, options: ActionOptions = {}): Promise<ActionResult<void>> {
+  async click(
+    selector: string,
+    options: ActionOptions = {},
+  ): Promise<ActionResult<ElementFacts>> {
     const timeout = options.timeoutMs ?? this.#timeout;
 
     // The element is found once and then acted on directly. The obvious
@@ -288,7 +342,7 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
 
     try {
       await withDeadline(element.click(), timeout, `click on ${selector}`);
-      return ok(undefined);
+      return ok(facts);
     } catch (error) {
       const { kind, detail } = classify(error);
       return failed("click", kind, detail);

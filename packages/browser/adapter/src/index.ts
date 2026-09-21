@@ -29,7 +29,7 @@ export type {
 } from "./types.js";
 
 export { inferStateChanging, resolveStateChanging } from "./state-changing.js";
-export type { ElementFacts, StateChangeVerdict } from "./state-changing.js";
+export type { AncestorStep, ElementFacts, StateChangeVerdict } from "./state-changing.js";
 
 export { PuppeteerBrowserAdapter, createBrowserAdapter } from "./puppeteer-adapter.js";
 export type { PuppeteerAdapterOptions } from "./puppeteer-adapter.js";

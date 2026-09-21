@@ -24,9 +24,12 @@
     "puppeteer-core": "^25.10.0"
   },
   "devDependencies": {
+    "@browserrecon/browser-adapter": "workspace:*",
     "@browserrecon/browser-manager": "workspace:*",
+    "@browserrecon/collector-interaction": "workspace:*",
     "@browserrecon/collector-navigation": "workspace:*",
     "@browserrecon/collector-network": "workspace:*",
-    "@browserrecon/fixtures": "workspace:*"
+    "@browserrecon/fixtures": "workspace:*",
+    "@browserrecon/policy": "workspace:*"
   }
 }

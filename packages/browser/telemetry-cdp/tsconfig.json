@@ -17,6 +17,9 @@
       "path": "../../../packages/policy"
     },
     {
+      "path": "../../collectors/interaction"
+    },
+    {
       "path": "../../collectors/navigation"
     },
     {
@@ -24,6 +27,9 @@
     },
     {
       "path": "../../fixtures"
+    },
+    {
+      "path": "../adapter"
     },
     {
       "path": "../manager"
