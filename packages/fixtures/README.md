@@ -9,22 +9,43 @@ Build plan §36.1, dev plan BR-M0-13.
   running server.
 - The harness that serves one on an ephemeral loopback port
   (`startFixture`, `withFixture`), including request recording.
-- The fixture apps themselves. Two so far:
-  - `staticSite()` — a multi-page site with links, a form, a JS file carrying
-    endpoints that appear nowhere in the HTML (one only as a concatenation),
-    `robots.txt`, `sitemap.xml`, a
-    relative redirect, a dead reference, and four instances of one route
-    template of which one deliberately diverges.
-  - `restApi()` — a collection, members, a 401-gated admin endpoint, and a
-    cart → order sequence with a real ordering dependency.
+- The fixture apps themselves. Every one is listed below with the stories it
+  serves, so a fixture that stops being used is visible rather than quietly
+  maintained forever.
+
+| App              | What it models                                                                                                                                                                                      | Consumed by                         |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `staticSite()`   | Multi-page site, a form, endpoints only in JS (one as a concatenation), `robots.txt`, `sitemap.xml`, a relative redirect, a dead reference, four instances of one route template with one diverging | BR-M0-13/14, BR-M1-06/15b/17b       |
+| `restApi()`      | Collection, members, a 401-gated admin endpoint, cart → order with a real ordering dependency                                                                                                       | BR-M0-13, BR-M1-04, BR-M1-22        |
+| `framedSite()`   | Nested iframes, including one added after load, each making its own requests                                                                                                                        | BR-M1-05                            |
+| `realtimeSite()` | WebSocket and SSE, with a fixed message sequence                                                                                                                                                    | BR-M1-08, BR-M1-23                  |
+| `spaSite()`      | Client routing: push, replace, hash, traverse, plus one route change with no interaction                                                                                                            | BR-M1-07                            |
+| `throttledApi()` | 429 with `Retry-After` on a request counter, a WAF-shaped 403, a 401 auth wall, a chunked slow response, and one endpoint that never answers                                                        | BR-M1-19/20/21, BR-M1-29b, BR-M1-31 |
+| `formsSite()`    | Safe GET forms beside destructive POSTs, one of them deliberately mislabelled "Continue"                                                                                                            | BR-M1-13, BR-M1-31                  |
+| `dynamicSite()`  | Links injected after load, a genuinely code-split chunk holding two endpoints, "load more"                                                                                                          | BR-M1-11, BR-M1-16, BR-M1-31        |
+| `noisySite()`    | Twenty vendor requests around two first-party API calls; vendor origin is injectable                                                                                                                | BR-M1-22, BR-M1-31                  |
+| `webmcpSite()`   | A WebMCP tool registry, including one destructive tool, registered without any network traffic                                                                                                      | BR-M1-24, BR-M1-31                  |
+
+Two deliberate holes, stated because a fixture that quietly stands in for
+something it does not model is worse than a missing one:
+
+- `noisySite()` serves its vendor assets same-origin unless a
+  `thirdPartyOrigin` is passed. Called with no argument it exercises noise
+  _volume_ and not cross-origin classification. A test that needs the latter
+  starts a second fixture and passes its origin.
+- `throttledApi()`'s `/api/slow` uses a real timer. Its bytes are identical
+  every run, but its timing is not, so it is excluded from the byte-comparison
+  baseline and covered by its own test.
 
 ## Does not own
 
 - Normalizing or comparing scan output — that is `tests/golden` (BR-M0-14).
 - Driving a browser at a fixture — `packages/browser/*` (M1).
-- The remaining §36.1 fixtures (auth, MFA, SPA routing, GraphQL, WebMCP,
-  throttling, WAF barriers, slow APIs). Each arrives with the story that needs
-  it, per BR-M1-30.
+- The §36.1 fixtures V1 does not need yet — authentication flows, MFA, and
+  GraphQL. Each arrives with the story that needs it (M2 onward).
+- **Circumventing anything.** `throttledApi()` exists so a scan can be shown
+  backing off and recording a barrier; §7.3 puts getting past one permanently
+  out of scope, and `tests/meta/no-solver.test.ts` enforces it repo-wide.
 
 ## The three rules
 

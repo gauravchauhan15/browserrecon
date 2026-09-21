@@ -62,6 +62,60 @@ const PROBE_PATHS: Readonly<Record<string, readonly [string, string][]>> = {
     ["GET", "/api/leaf"],
     ["GET", "/second"],
   ],
+  "throttled-api": [
+    ["GET", "/"],
+    // Walked past the burst allowance and out the other side, so the
+    // baseline pins the whole cycle rather than just the first 429.
+    ["GET", "/api/burst"],
+    ["GET", "/api/burst"],
+    ["GET", "/api/burst"],
+    ["GET", "/api/burst"],
+    ["GET", "/api/burst"],
+    ["GET", "/api/burst"],
+    ["GET", "/api/protected"],
+    ["GET", "/api/login"],
+    // /api/slow and /api/never are deliberately absent: one is chunked and
+    // the other never ends, so neither has comparable raw bytes. Both are
+    // covered by their own tests below.
+  ],
+  "forms-site": [
+    ["GET", "/"],
+    ["GET", "/search"],
+    ["GET", "/products"],
+    // The destructive routes are probed here on purpose: this test is the
+    // fixture proving it *can* be called, which is what makes a later
+    // assertion that the scan never called it mean something.
+    ["POST", "/api/subscribe"],
+    ["POST", "/api/account/delete"],
+    ["POST", "/api/next"],
+  ],
+  "dynamic-site": [
+    ["GET", "/"],
+    ["GET", "/app.js"],
+    ["GET", "/chunk-orders.js"],
+    ["GET", "/api/rows"],
+    ["GET", "/about"],
+    ["GET", "/settings"],
+    ["GET", "/rows/1"],
+    ["GET", "/api/orders/pending"],
+  ],
+  "noisy-site": [
+    ["GET", "/"],
+    ["GET", "/catalog"],
+    ["GET", "/api/session"],
+    ["GET", "/api/catalog"],
+    ["GET", "/vendor/analytics.js"],
+    ["GET", "/vendor/fonts.css"],
+    ["GET", "/vendor/collect"],
+    ["GET", "/vendor/px.gif"],
+    ["GET", "/vendor/rum"],
+  ],
+  "webmcp-site": [
+    ["GET", "/"],
+    ["GET", "/api/products/search"],
+    ["POST", "/api/cart/items"],
+    ["DELETE", "/api/account"],
+  ],
   "realtime-site": [
     ["GET", "/"],
     // /sse is deliberately absent. It is a stream, so its raw bytes include
