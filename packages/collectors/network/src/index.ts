@@ -31,4 +31,7 @@ export {
 export type { NormalizationRule, NormalizedUrl } from "./url.js";
 
 export { FAILURE_REASONS, classifyFailure } from "./failures.js";
+
+export { BARRIER_CATEGORIES, classifyBarrier, shouldAbortScan } from "./barriers.js";
+export type { Barrier, BarrierCategory, BarrierInput } from "./barriers.js";
 export type { ClassifiedFailure, FailureReason } from "./failures.js";

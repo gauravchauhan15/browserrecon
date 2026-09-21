@@ -382,6 +382,18 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/rate-controller:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../events
+      '@browserrecon/policy':
+        specifier: workspace:*
+        version: link:../policy
+
   packages/test-utils: {}
 
   tests/golden:

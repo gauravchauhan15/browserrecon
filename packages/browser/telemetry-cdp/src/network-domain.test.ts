@@ -16,6 +16,7 @@ import {
 import { startFixture, restApi, staticSite, type RunningFixture } from "@browserrecon/fixtures";
 import { EventBus, type EventEnvelope } from "@browserrecon/events";
 import { attachTelemetry } from "./telemetry.js";
+import { waitUntil } from "./wait-until.js";
 import type { NetworkRequestPayload, NetworkResponsePayload, TelemetryStats } from "./types.js";
 import type { BodyCaptureLimits } from "./body-policy.js";
 
@@ -320,6 +321,17 @@ describe("what each event carries", () => {
       // report what went on the wire, cookies included. For a recon tool the
       // difference is the point.
       const { seen } = await visit("/");
+      // Waits for the field rather than for a quiet period. Draining settles
+      // on a gap in CDP events, and under load that gap can appear before
+      // Chrome has sent the ExtraInfo — which made this test assert that the
+      // machine was not busy.
+      await waitUntil(
+        () =>
+          responsesIn(seen).some(
+            (payload) => payload.url.endsWith("/") && payload.requestHeadersSent !== undefined,
+          ),
+        { what: "the document's requestHeadersSent" },
+      );
       const response = responsesIn(seen).find((payload) => payload.url.endsWith("/"));
 
       expect(response?.requestHeadersSent).toBeDefined();

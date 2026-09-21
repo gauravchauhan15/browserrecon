@@ -95,18 +95,39 @@ interface FrameState {
 }
 
 export interface PageDomainState {
-  /** Frames currently attached, by CDP frame id. */
+  /**
+   * Frames currently attached, keyed `targetId:frameId`.
+   *
+   * One state object is shared by every target, so the key has to carry the
+   * target. Keyed by frame id alone, two pages' frames collided — and since
+   * the initial about:blank tab is also a target, a real page's frames could
+   * be overwritten by it.
+   */
   readonly frames: Map<string, FrameState>;
   /** Live execution contexts, by CDP context id. */
   readonly contexts: Map<number, { frameId?: string | undefined; origin?: string | undefined }>;
   /** Scripts seen, by CDP script id. */
   readonly scripts: Set<string>;
-  /** The target's main frame, once known. */
-  mainFrameId?: string | undefined;
+  /**
+   * Each target's main frame, by target id.
+   *
+   * Was a single value, which was wrong in a way that only showed up with
+   * more than one tab open: every attach overwrote it, so whichever target
+   * attached last owned "the" main frame and every other page's main-frame
+   * navigation was reported as a subframe. It surfaced as an intermittent
+   * test failure in the full suite and never when the browser tests ran
+   * alone — the signature of shared state, not of timing.
+   */
+  readonly mainFrameIds: Map<string, string>;
 }
 
 export function newPageDomainState(): PageDomainState {
-  return { frames: new Map(), contexts: new Map(), scripts: new Set() };
+  return {
+    frames: new Map(),
+    contexts: new Map(),
+    scripts: new Set(),
+    mainFrameIds: new Map(),
+  };
 }
 
 export interface PageDomainOptions {
@@ -134,15 +155,17 @@ export function wirePageDomain(
     return `nav_${String(ctx.counters.navigations).padStart(4, "0")}`;
   };
 
+  const frameKey = (frameId: string): string => `${targetId}:${frameId}`;
+
   const frameOf = (frameId: string): FrameState => {
-    const existing = state.frames.get(frameId);
+    const existing = state.frames.get(frameKey(frameId));
     if (existing !== undefined) return existing;
     const created: FrameState = { frameId };
-    state.frames.set(frameId, created);
+    state.frames.set(frameKey(frameId), created);
     return created;
   };
 
-  const isMain = (frameId: string): boolean => state.mainFrameId === frameId;
+  const isMain = (frameId: string): boolean => state.mainFrameIds.get(targetId) === frameId;
 
   cdp.on("Page.frameAttached", (raw: unknown) => {
     ctx.touch();
@@ -159,7 +182,7 @@ export function wirePageDomain(
   cdp.on("Page.frameDetached", (raw: unknown) => {
     ctx.touch();
     const event = raw as FrameDetached;
-    state.frames.delete(event.frameId);
+    state.frames.delete(frameKey(event.frameId));
 
     // Contexts belonging to a detached frame go with it. Chrome usually sends
     // executionContextDestroyed too, but not reliably for a frame swapped out
@@ -222,7 +245,7 @@ export function wirePageDomain(
     const frame = frameOf(event.frame.id);
 
     // The first frame Chrome reports with no parent is the tab's top document.
-    if (event.frame.parentId === undefined) state.mainFrameId = event.frame.id;
+    if (event.frame.parentId === undefined) state.mainFrameIds.set(targetId, event.frame.id);
     frame.parentFrameId = event.frame.parentId;
 
     // A navigation that committed without a start — a redirect chain, or one
@@ -319,7 +342,7 @@ export function wirePageDomain(
     const event = raw as LifecycleEvent;
     if (event.name !== "load" && event.name !== "DOMContentLoaded") return;
 
-    const frame = state.frames.get(event.frameId);
+    const frame = state.frames.get(frameKey(event.frameId));
     const payload: PageLoadedPayload = {
       frameId: event.frameId,
       ...(frame?.parentFrameId === undefined ? {} : { parentFrameId: frame.parentFrameId }),
@@ -436,6 +459,7 @@ export async function enablePageDomains(
   cdp: CDPSession,
   options: PageDomainOptions,
   state: PageDomainState,
+  targetId: string,
 ): Promise<void> {
   // The frame tree is read BEFORE Page.enable, not after.
   //
@@ -451,8 +475,8 @@ export async function enablePageDomains(
       frameTree: { frame: { id: string; parentId?: string; url?: string } };
     };
     const root = tree.frameTree.frame;
-    state.mainFrameId = root.id;
-    state.frames.set(root.id, {
+    state.mainFrameIds.set(targetId, root.id);
+    state.frames.set(`${targetId}:${root.id}`, {
       frameId: root.id,
       ...(root.parentId === undefined ? {} : { parentFrameId: root.parentId }),
       ...(root.url === undefined ? {} : { url: root.url }),

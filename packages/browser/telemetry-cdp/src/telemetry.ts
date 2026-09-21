@@ -156,12 +156,14 @@ export async function attachTelemetry(options: TelemetryOptions): Promise<Teleme
             wirePageDomain(child, event.targetInfo.targetId, ctx, pageState);
             // Workers have no Page domain; failing to enable it there must not
             // cost us the Runtime and Debugger domains, which they do have.
-            await enablePageDomains(child, options, pageState).catch((error: unknown) => {
-              log.debug("page domains unavailable on this target", {
-                type: event.targetInfo.type,
-                reason: error instanceof Error ? error.message : String(error),
-              });
-            });
+            await enablePageDomains(child, options, pageState, event.targetInfo.targetId).catch(
+              (error: unknown) => {
+                log.debug("page domains unavailable on this target", {
+                  type: event.targetInfo.type,
+                  reason: error instanceof Error ? error.message : String(error),
+                });
+              },
+            );
           }
         }
       } catch (error) {

@@ -12,6 +12,7 @@ import {
 import { framedSite, startFixture, type RunningFixture } from "@browserrecon/fixtures";
 import { EventBus, type EventEnvelope } from "@browserrecon/events";
 import { attachTelemetry } from "./telemetry.js";
+import { waitUntil } from "./wait-until.js";
 import type {
   ExecutionContextPayload,
   NavigationCommittedPayload,
@@ -85,6 +86,18 @@ describe("navigation", () => {
       const page = await (session as BrowserSession).browser.newPage();
       await page.goto(`${origin}/second`, { waitUntil: "load" });
       await telemetry.drain();
+      // Same reason as in network-domain.test.ts: wait for the pair to
+      // exist rather than for the browser to go quiet.
+      await waitUntil(
+        () =>
+          payloadsOf<NavigationStartedPayload>(seen, "navigation_started").some(
+            (payload) => payload.isMainFrame,
+          ) &&
+          payloadsOf<NavigationCommittedPayload>(seen, "navigation_committed").some((payload) =>
+            payload.url.endsWith("/second"),
+          ),
+        { what: "the navigation started/committed pair" },
+      );
 
       const started = payloadsOf<NavigationStartedPayload>(seen, "navigation_started").filter(
         (payload) => payload.isMainFrame,

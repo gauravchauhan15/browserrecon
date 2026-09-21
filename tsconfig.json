@@ -66,6 +66,9 @@
       "path": "./packages/policy"
     },
     {
+      "path": "./packages/rate-controller"
+    },
+    {
       "path": "./packages/test-utils"
     },
     {
