@@ -149,6 +149,30 @@ describe("every decision is explained", () => {
   });
 });
 
+describe("classification on its own", () => {
+  // Reached through decideSubmission everywhere else, which means a
+  // classification bug could hide behind a policy gate that refused the form
+  // for an unrelated reason.
+  it("names what it thinks each form is", async () => {
+    expect(classifyForm(form())).toBe("safe_read");
+    expect(classifyForm(form({ method: "POST", action: "https://app.test/comments" }))).toBe(
+      "state_changing",
+    );
+    expect(classifyForm(form({ action: "https://app.test/delete" }))).toBe("destructive");
+    expect(classifyForm(form({ hasCredentialField: true }))).toBe("authentication");
+  });
+
+  it("puts credentials ahead of everything, including destructive", async () => {
+    // A login form at /account/delete-session is an authentication form; the
+    // reason a user needs is "set up an auth profile", not "looks risky".
+    expect(
+      classifyForm(
+        form({ hasCredentialField: true, action: "https://app.test/delete-session" }),
+      ),
+    ).toBe("authentication");
+  });
+});
+
 describe("synthesized values", () => {
   it("is deterministic, because golden output compares two runs", async () => {
     for (const name of ["q", "email", "quantity", "unknown_field"]) {
