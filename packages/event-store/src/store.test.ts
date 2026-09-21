@@ -1,10 +1,10 @@
-import { mkdtempSync, readFileSync, statSync, existsSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, statSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createEnvelope, type EventEnvelope } from "@browserrecon/events";
 import { EventStore, type Checkpoint, type EventStoreOptions, type Manifest } from "./store.js";
-import { readAllEvents, readManifest, payloadIsExternal } from "./reader.js";
+import { readAllEvents, readEvents, readManifest, payloadIsExternal } from "./reader.js";
 import { isExternalBodyRef, BodyStore } from "./bodies.js";
 import { sessionPaths } from "./layout.js";
 
@@ -406,17 +406,152 @@ describe("resume support", () => {
   it("appends to an existing session rather than truncating it", async () => {
     // A resumed scan must extend the log. Truncating would destroy the
     // evidence the first run collected.
+    //
+    // This assertion used to pass without `resume: true`, because three
+    // small events all land in segment 1 and reopening it happened to
+    // produce the right order. It said nothing about a log that had
+    // rotated, which is where the ordering actually broke — see "keeps the
+    // log in sequence order across runs" below.
     const d = dir();
     const first = store(d);
     first.append(envelope(1));
     first.append(envelope(2));
     first.close();
 
-    const second = store(d);
+    const second = new EventStore({ dir: d, sessionId: "sess_0001", resume: true });
     second.append(envelope(3));
     second.close();
 
     const events = await readAllEvents(d);
     expect(events.map((e) => e.sequence)).toEqual([1, 2, 3]);
+  });
+});
+
+describe("resuming a session", () => {
+  const resumeEvent = (sequence: number): EventEnvelope =>
+    createEnvelope({
+      sequence,
+      event_id: `evt_${String(sequence).padStart(6, "0")}`,
+      session_id: "sess_0001",
+      type: "page_loaded",
+      timestamp: "1970-01-01T00:00:00.000Z",
+      auth_context: "anonymous",
+      provenance: "observed",
+      payload: { n: sequence },
+    });
+
+  async function sequencesIn(dir: string): Promise<number[]> {
+    const out: number[] = [];
+    for await (const event of readEvents(dir)) out.push(event.sequence);
+    return out;
+  }
+
+  it("keeps the log in sequence order across runs", async () => {
+    // The measured failure this exists to prevent: a second store over the
+    // same directory reopened segment 1, appended into the middle of it,
+    // and the log read back as 1,2,13,3,4,14,… — every event present, the
+    // order destroyed, and nothing reporting a problem.
+    const dir = mkdtempSync(join(tmpdir(), "br-store-resume-"));
+
+    const first = new EventStore({ dir, sessionId: "sess_0001", maxSegmentBytes: 400 });
+    for (let sequence = 1; sequence <= 12; sequence += 1) first.append(resumeEvent(sequence));
+    first.close();
+
+    const second = new EventStore({
+      dir,
+      sessionId: "sess_0001",
+      maxSegmentBytes: 400,
+      resume: true,
+    });
+    for (let sequence = 13; sequence <= 18; sequence += 1) second.append(resumeEvent(sequence));
+    second.close();
+
+    const sequences = await sequencesIn(dir);
+    expect(sequences).toEqual([...Array(18)].map((_, index) => index + 1));
+  });
+
+  it("keeps the earlier runs' segments in the manifest", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "br-store-resume-"));
+    const first = new EventStore({ dir, sessionId: "sess_0001", maxSegmentBytes: 400 });
+    for (let sequence = 1; sequence <= 8; sequence += 1) first.append(resumeEvent(sequence));
+    const segmentsBefore = first.stats.segments;
+    first.close();
+
+    const second = new EventStore({ dir, sessionId: "sess_0001", resume: true });
+    second.append(resumeEvent(9));
+    second.close();
+
+    const manifest = readManifest(dir);
+    expect(manifest?.segments.length).toBe(segmentsBefore + 1);
+    // Ranges from the first run survive rather than being overwritten with
+    // the second run's.
+    expect(manifest?.segments[0]?.firstSequence).toBe(1);
+  });
+
+  it("continues from the sequence the log reached", () => {
+    const dir = mkdtempSync(join(tmpdir(), "br-store-resume-"));
+    const first = new EventStore({ dir, sessionId: "sess_0001" });
+    for (let sequence = 1; sequence <= 5; sequence += 1) first.append(resumeEvent(sequence));
+    first.close();
+
+    // A resumed scan has to know where to start numbering, or it writes
+    // duplicate sequences that no reader can order.
+    const second = new EventStore({ dir, sessionId: "sess_0001", resume: true });
+    expect(second.stats.writtenSequence).toBe(5);
+    second.close();
+  });
+
+  it("opens a fresh segment rather than appending after a possibly torn line", async () => {
+    // The previous run may have died mid-line. Appending after a torn line
+    // splices two events into one unparseable record; a new segment keeps
+    // the damage where the reader's per-line handling already copes.
+    const dir = mkdtempSync(join(tmpdir(), "br-store-resume-"));
+    const first = new EventStore({ dir, sessionId: "sess_0001" });
+    first.append(resumeEvent(1));
+    first.close();
+
+    appendFileSync(join(dir, "events-0001.jsonl"), '{"event_id":"evt_0000');
+
+    const second = new EventStore({ dir, sessionId: "sess_0001", resume: true });
+    second.append(resumeEvent(2));
+    second.close();
+
+    const problems: unknown[] = [];
+    const sequences: number[] = [];
+    for await (const event of readEvents(dir, { onProblem: (p) => problems.push(p) })) {
+      sequences.push(event.sequence);
+    }
+    expect(sequences).toEqual([1, 2]);
+    expect(problems).toHaveLength(1);
+  });
+
+  it("refuses to open a new session over an existing one", () => {
+    // The silent-corruption case, now loud.
+    const dir = mkdtempSync(join(tmpdir(), "br-store-resume-"));
+    const first = new EventStore({ dir, sessionId: "sess_0001" });
+    first.append(resumeEvent(1));
+    first.close();
+
+    expect(() => new EventStore({ dir, sessionId: "sess_0001" })).toThrow(/resume: true/);
+  });
+
+  it("refuses to resume a directory holding a different session", () => {
+    // Appending one session's events to another's produces a log whose
+    // every downstream claim is about two scans at once.
+    const dir = mkdtempSync(join(tmpdir(), "br-store-resume-"));
+    const first = new EventStore({ dir, sessionId: "sess_0001" });
+    first.append(resumeEvent(1));
+    first.close();
+
+    expect(() => new EventStore({ dir, sessionId: "sess_0002", resume: true })).toThrow(
+      /holds session sess_0001/,
+    );
+  });
+
+  it("refuses to resume a directory with nothing to resume", () => {
+    const dir = mkdtempSync(join(tmpdir(), "br-store-resume-"));
+    expect(() => new EventStore({ dir, sessionId: "sess_0001", resume: true })).toThrow(
+      /no readable segments/,
+    );
   });
 });

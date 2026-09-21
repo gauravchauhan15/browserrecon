@@ -21,7 +21,9 @@
     "@browserrecon/browser-manager": "workspace:*",
     "@browserrecon/config": "workspace:*",
     "@browserrecon/core": "workspace:*",
+    "@browserrecon/event-store": "workspace:*",
     "@browserrecon/events": "workspace:*",
+    "@browserrecon/orchestrator": "workspace:*",
     "@browserrecon/policy": "workspace:*",
     "commander": "^15.0.0"
   },

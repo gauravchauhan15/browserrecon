@@ -142,9 +142,15 @@ importers:
       '@browserrecon/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@browserrecon/event-store':
+        specifier: workspace:*
+        version: link:../../packages/event-store
       '@browserrecon/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@browserrecon/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
       '@browserrecon/policy':
         specifier: workspace:*
         version: link:../../packages/policy
@@ -417,6 +423,30 @@ importers:
       '@browserrecon/test-utils':
         specifier: workspace:*
         version: link:../test-utils
+
+  packages/orchestrator:
+    dependencies:
+      '@browserrecon/collector-network':
+        specifier: workspace:*
+        version: link:../collectors/network
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../core
+      '@browserrecon/deterministic-explorer':
+        specifier: workspace:*
+        version: link:../browser/deterministic-explorer
+      '@browserrecon/event-store':
+        specifier: workspace:*
+        version: link:../event-store
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../events
+      '@browserrecon/policy':
+        specifier: workspace:*
+        version: link:../policy
+      '@browserrecon/rate-controller':
+        specifier: workspace:*
+        version: link:../rate-controller
 
   packages/policy:
     dependencies:

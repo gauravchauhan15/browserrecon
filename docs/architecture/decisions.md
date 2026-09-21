@@ -102,3 +102,42 @@ specification, and each narrows a promise the build plan makes.
 | §31's full package tree is **not** scaffolded up front            | Only packages with an active story are created; `scripts/new-package.mjs` adds the rest in one command. 35 empty packages with placeholder tests asserting nothing is permanent noise, and contradicts "no half-finished implementations" |
 | Fixtures live in `packages/fixtures`, not a top-level `fixtures/` | Matches where every other package lives and where the workspace globs already pointed. `test-utils` had already established that test-only code sits in `packages/` and is marked `private`                                               |
 | `tests/*` are workspace packages                                  | `tests/golden` has real dependencies and is imported by later stories, so it needs a `package.json` like anything else. `tests/*` added to `pnpm-workspace.yaml`                                                                          |
+
+### The orchestrator cannot live in `packages/core` (BR-M1-28)
+
+The dev plan places the Scan Orchestrator in `packages/core`. §1.2 puts
+`core` in the innermost layer, importing nothing from `browser/`,
+`discovery/` or `collectors/` — and an orchestrator imports all three. It
+lives in `packages/orchestrator`, a new layer above them and below
+`apps/cli`. The interactive barrier assist (BR-M1-29b, planned for
+`packages/browser/manager`) moved for the same reason: it needs the barrier
+taxonomy from `collectors/network`, which the browser manager must not
+depend on.
+
+### Reopening a session directory silently destroyed the event log's order
+
+Measured, not reasoned about. Constructing a second `EventStore` over an
+existing session directory reopened segment 1, appended into the middle of
+it, and rewrote the manifest with only the new run's ranges. An 18-event log
+written across two runs read back as `1,2,13,3,4,14,…` — every event still
+present, the order destroyed, no error anywhere.
+
+A test asserting "appends to an existing session rather than truncating it"
+had passed since BR-M0-09. It wrote three events, which all fit in segment 1,
+so it only ever covered the case that worked.
+
+Continuing a session is now explicit (`resume: true`), opening a store
+without it over an existing session throws, and a resume opens a _new_
+segment rather than appending to the last one — the previous run may have
+died mid-line, and appending after a torn line splices two events into one
+unparseable record.
+
+### The discovery deadline has to bound the join, not just the loop
+
+§8.5 rule 2's bound was implemented as a race in the browsing loop, and every
+test passed with it removed — because every test's discovery source honoured
+its abort signal. One that does not (a subprocess wrapper that never wired
+the signal through) would hang the scan at the _join_, after every page had
+been visited and with every artifact still unwritten. Both the loop's wait
+and the join are now time-boxed, and a source that will not stop is recorded
+as a degradation rather than waited on.

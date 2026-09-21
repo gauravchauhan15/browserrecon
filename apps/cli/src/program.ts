@@ -21,6 +21,7 @@ import { CliError, EXIT_CODES, EXIT_CODE_DESCRIPTIONS } from "./exit-codes.js";
 import { addSpecOptions } from "./options.js";
 import { configValidate } from "./commands/config.js";
 import { doctor } from "./commands/doctor.js";
+import { resume as resumeSession } from "./commands/resume.js";
 
 /** Injected so tests capture output instead of writing to the terminal. */
 export interface ProgramIo {
@@ -109,11 +110,22 @@ export function buildProgram(io: ProgramIo, argv: readonly string[] = []): Comma
   addSpecOptions(agent, CONFIG_SPEC);
   addSpecOptions(agent, POLICY_SPEC);
 
-  program
+  const resume = program
     .command("resume")
     .description("continue an interrupted or budget-exhausted scan")
     .argument("<session>", "session directory or id")
-    .action(() => notImplemented("resume"));
+    .action((session: string, _options: unknown, command: Command) => {
+      resumeSession({
+        session,
+        parsed: command.opts(),
+        argv,
+        env: io.env,
+        configFile: program.opts().config as string | undefined,
+        write: io.out,
+      });
+    });
+  addSpecOptions(resume, CONFIG_SPEC);
+  addSpecOptions(resume, POLICY_SPEC);
 
   program
     .command("export")

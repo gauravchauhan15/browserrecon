@@ -1,0 +1,29 @@
+{
+  "name": "@browserrecon/orchestrator",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The scan lifecycle: policy, discovery, browsing, collection, export \u2014 with per-phase failure isolation",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@browserrecon/collector-network": "workspace:*",
+    "@browserrecon/core": "workspace:*",
+    "@browserrecon/deterministic-explorer": "workspace:*",
+    "@browserrecon/event-store": "workspace:*",
+    "@browserrecon/events": "workspace:*",
+    "@browserrecon/policy": "workspace:*",
+    "@browserrecon/rate-controller": "workspace:*"
+  }
+}

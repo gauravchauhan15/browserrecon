@@ -265,7 +265,7 @@ describe("failure paths", () => {
       // this profile — including the renderer and GPU helpers, which a check
       // on the browser pid alone would miss. The profile directory is gone by
       // now, but a surviving process still carries it in its command line.
-      expect(processesUsing(session.profileDir)).toEqual([]);
+      expect(await waitForNoProcessesUsing(session.profileDir)).toEqual([]);
 
       // Not `process.kill(pid, 0)`. A just-killed child is a zombie until Node
       // reaps it, and signal 0 reports a zombie as alive — measured here: the
@@ -352,6 +352,28 @@ function runState(pid: number): string {
   if (pid === 0) return "";
   const result = spawnSync("ps", ["-o", "state=", "-p", String(pid)], { encoding: "utf8" });
   return (result.stdout ?? "").trim();
+}
+
+/**
+ * Wait for every process using this profile to go away, up to a limit.
+ *
+ * Killing the browser process does not synchronously reap its renderer and
+ * GPU helpers — the OS tears them down a moment later. Asserting in the same
+ * tick made this test pass alone and fail under the full suite, where the
+ * machine is busy enough for the gap to matter. What the test means is "no
+ * orphan survives", not "no orphan exists in this microsecond", so it waits.
+ */
+async function waitForNoProcessesUsing(
+  profileDir: string,
+  limitMs = 10_000,
+): Promise<string[]> {
+  const deadline = Date.now() + limitMs;
+  let remaining = processesUsing(profileDir);
+  while (remaining.length > 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    remaining = processesUsing(profileDir);
+  }
+  return remaining;
 }
 
 /** Pids of any process whose command line mentions this profile directory. */

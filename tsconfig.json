@@ -78,6 +78,9 @@
       "path": "./packages/fixtures"
     },
     {
+      "path": "./packages/orchestrator"
+    },
+    {
       "path": "./packages/policy"
     },
     {

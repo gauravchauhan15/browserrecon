@@ -1,0 +1,32 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts"],
+  "references": [
+    {
+      "path": "../../packages/browser/deterministic-explorer"
+    },
+    {
+      "path": "../../packages/collectors/network"
+    },
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/event-store"
+    },
+    {
+      "path": "../../packages/events"
+    },
+    {
+      "path": "../../packages/policy"
+    },
+    {
+      "path": "../../packages/rate-controller"
+    }
+  ]
+}

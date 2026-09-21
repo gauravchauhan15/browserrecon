@@ -17,7 +17,13 @@
       "path": "../../packages/core"
     },
     {
+      "path": "../../packages/event-store"
+    },
+    {
       "path": "../../packages/events"
+    },
+    {
+      "path": "../../packages/orchestrator"
     },
     {
       "path": "../../packages/policy"

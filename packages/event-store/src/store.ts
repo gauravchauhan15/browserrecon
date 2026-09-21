@@ -31,6 +31,7 @@ import {
   fsyncSync,
   mkdirSync,
   openSync,
+  readFileSync,
   writeFileSync,
   writeSync,
 } from "node:fs";
@@ -80,6 +81,19 @@ export interface EventStoreOptions {
   /** fsync after this many appends. */
   readonly checkpointEveryEvents?: number | undefined;
   readonly now?: (() => Date) | undefined;
+  /**
+   * Continue an existing session's log instead of starting one.
+   *
+   * Required rather than inferred, and opening a store *without* it over a
+   * directory that already has a manifest throws. Inferring it looked
+   * harmless until the failure was measured: a second store over the same
+   * directory reopened segment 1, appended into the middle of it, and
+   * rewrote the manifest with only the new run's ranges. The log read back
+   * as `1,2,13,3,4,14,…` — every event still present, the order destroyed,
+   * and nothing anywhere reporting a problem. A resume has to be something
+   * the caller asked for.
+   */
+  readonly resume?: boolean | undefined;
 }
 
 export interface EventStoreStats {
@@ -135,8 +149,60 @@ export class EventStore {
 
     // 0700: the directory holds unredacted captured data (§37.2).
     mkdirSync(this.paths.dir, { recursive: true, mode: 0o700 });
-    this.#openSegment(1);
+
+    const existing = this.#readExistingManifest();
+    if (options.resume === true) {
+      if (existing === undefined) {
+        throw new Error(
+          `cannot resume ${this.paths.dir}: no readable segments.json. ` +
+            `Start a new session instead of resuming this directory.`,
+        );
+      }
+      if (existing.sessionId !== options.sessionId) {
+        // Appending one session's events to another's produces a log whose
+        // every downstream claim is about two scans at once.
+        throw new Error(
+          `cannot resume ${this.paths.dir}: it holds session ${existing.sessionId}, not ${options.sessionId}`,
+        );
+      }
+
+      this.#segments = [...existing.segments];
+      this.#writtenSequence = Math.max(0, ...existing.segments.map((s) => s.lastSequence));
+      this.#durableSequence = this.#writtenSequence;
+
+      // A *new* segment rather than appending to the last one. The previous
+      // run may have died mid-line, and appending after a torn line splices
+      // two events into one unparseable record. Opening a fresh segment
+      // keeps the damage confined to the segment it happened in, where the
+      // reader's per-line handling already copes with it — and it makes
+      // segment boundaries line up with run boundaries, which is what a
+      // reader of session.json expects anyway.
+      const lastOrdinal = Math.max(0, ...existing.segments.map((s) => s.ordinal));
+      this.#openSegment(lastOrdinal + 1);
+    } else {
+      if (existing !== undefined) {
+        throw new Error(
+          `${this.paths.dir} already holds session ${existing.sessionId}. ` +
+            `Pass resume: true to continue it, or choose a new directory.`,
+        );
+      }
+      this.#openSegment(1);
+    }
     this.#writeManifest();
+  }
+
+  /** The manifest already on disk, if there is a usable one. */
+  #readExistingManifest(): Manifest | undefined {
+    if (!existsSync(this.paths.manifest)) return undefined;
+    try {
+      const parsed = JSON.parse(readFileSync(this.paths.manifest, "utf8")) as Manifest;
+      return parsed.version === 1 && Array.isArray(parsed.segments) ? parsed : undefined;
+    } catch {
+      // An unreadable manifest is not an existing session for these
+      // purposes — the reader rediscovers segments by filename, and
+      // refusing to write would strand a directory nobody can recover.
+      return undefined;
+    }
   }
 
   get sessionId(): string {

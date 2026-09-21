@@ -19,6 +19,9 @@ export type { ExitCode } from "./exit-codes.js";
 
 export { addSpecOptions, collectCliValues } from "./options.js";
 
+export { policySummaryFor, resolveSessionDir, resume } from "./commands/resume.js";
+export type { ResumeInput } from "./commands/resume.js";
+
 export {
   TERMINAL_WIDTH,
   formatSummary,

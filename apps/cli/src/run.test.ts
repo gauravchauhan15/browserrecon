@@ -67,7 +67,6 @@ describe("unimplemented commands", () => {
   it.each([
     ["scan", ["scan", "https://shop.example.com"]],
     ["agent", ["agent", "https://shop.example.com"]],
-    ["resume", ["resume", "sess_0001"]],
     ["export", ["export", "sess_0001"]],
   ] as const)("%s fails clearly rather than doing nothing", async (_name, argv) => {
     // A pre-release build that accepts `scan` and silently does nothing reads
@@ -81,6 +80,15 @@ describe("unimplemented commands", () => {
     const { err } = await invoke(["scan", "https://shop.example.com"]);
     expect(err).toContain("runtime collection is still being built");
     expect(err).toContain("config validate");
+  });
+
+  it("resume validates the session before refusing", async () => {
+    // `resume` is no longer a stub: the §30 gate is real and runs first, so
+    // a missing session is reported as a missing session rather than as an
+    // unimplemented command. Only the engine behind the gate is pending.
+    const { code, err } = await invoke(["resume", "sess_0001"]);
+    expect(code).not.toBe(EXIT_CODES.success);
+    expect(err).toContain("No session found");
   });
 
   it("covers the auth subcommands too", async () => {
