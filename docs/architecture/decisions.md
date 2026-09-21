@@ -193,3 +193,26 @@ hand-rolled scope check that accepted a URL the adapter then refused. The
 queue and the adapter now share one `PolicyEngine`, a visit reports its
 outcome explicitly, and a browsing phase that loaded nothing is a failure
 with a remedy naming the setting that caused it.
+
+### A V8 heap ceiling does not bound a native parser (BR-M2-09)
+
+§10B.9 asks for bounded workers. One was built with
+`resourceLimits.maxOldGenerationSizeMb` and removed after measurement: a 16 MB
+ceiling parsed a 4.8 MB bundle to completion while resident memory grew
+342 MB and the JS heap grew 0.0 MB. tree-sitter allocates its syntax tree in
+native memory, which V8's limit does not govern.
+
+Worse, hitting the ceiling was not clean — worker threads share the process
+address space, and under a pooled test runner a nested worker reaching its
+limit took the host process down three times out of three.
+
+The size gate is the memory bound: RSS tracks input size at roughly 28x, so
+capping input caps memory. Together with the per-file time budget and a parser
+that returns partial trees instead of throwing, §10B.9's requirement is met by
+a different mechanism than the one it names. Recorded in full in
+`js-analysis-spike.md`.
+
+The general lesson, which is why this is here rather than only in the spike
+note: a bound expressed in the wrong units is not a weak bound, it is no
+bound. It would have passed review and shown green tests while protecting
+nothing.

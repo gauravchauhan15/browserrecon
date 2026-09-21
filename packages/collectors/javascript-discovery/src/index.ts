@@ -53,6 +53,46 @@ export {
 } from "./tree-sitter-analyzer.js";
 export type { TreeSitterAnalyzerOptions } from "./tree-sitter-analyzer.js";
 
+export { PRIORITIES, basePriority, orderForAnalysis, triage } from "./triage.js";
+export type { AssetFacts, Priority, RuntimeSignals, TriageVerdict } from "./triage.js";
+
+export { cacheKey, createAnalysisCache, hashContent } from "./cache.js";
+export type {
+  AnalysisCache,
+  CacheKeyParts,
+  CacheOptions,
+  CacheStats,
+  ContentRecord,
+  Sighting,
+} from "./cache.js";
+
+export {
+  DEFAULT_BOUNDS,
+  LIMIT_REASONS,
+  createAnalysisPipeline,
+  refusedResult,
+} from "./pipeline.js";
+export type {
+  AnalysisBounds,
+  AnalysisPipeline,
+  BoundedResult,
+  LimitReason,
+  PipelineOptions,
+} from "./pipeline.js";
+
+export { CHUNK_SOURCES, discoverChunks, unfetchedChunks } from "./chunks.js";
+export type { ChunkSource, DiscoveredChunk } from "./chunks.js";
+
+export { RECONCILED_STATUSES, reconcile } from "./reconcile.js";
+export type {
+  ReconcileOptions,
+  ReconcileResult,
+  ReconciledEndpoint,
+  ReconciledStatus,
+  RuntimeEndpoint,
+  StaticCandidate,
+} from "./reconcile.js";
+
 export interface ScriptAsset {
   /** Empty for an inline script, which is exactly the interesting case. */
   readonly url: string;

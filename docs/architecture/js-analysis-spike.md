@@ -98,3 +98,55 @@ decision is reversible without touching a consumer.
   enormous string literal would behave differently.
 - Extraction _quality_ is untested here. This measures that the parser copes;
   whether the rules find the right endpoints is BR-M2-06 and BR-M2-07.
+
+---
+
+# Follow-up: the worker was built, measured, and removed (BR-M2-09)
+
+§10B.9 asks for deep parsing to run "in bounded workers/processes so malformed
+or enormous bundles cannot take down the entire scan". A `worker_threads`
+implementation with `resourceLimits.maxOldGenerationSizeMb` was written and
+then removed. Two measurements.
+
+## It did not bound the parser
+
+A worker with a **16 MB** old-generation ceiling parsed a 4.8 MB bundle to
+completion:
+
+```text
+ceiling 16MB -> PARSED. heap +0.0MB, rss +342MB, external +0.0MB
+ceiling 64MB -> PARSED. heap +0.0MB, rss  -7MB,  external +0.0MB
+```
+
+tree-sitter allocates its syntax tree in **native** memory. V8's
+old-generation limit never sees it, and `process.memoryUsage().external` does
+not account for it either. The ceiling only ever bounded the JS side — the
+source string and the result object.
+
+The earlier run that _did_ report `memory_limit` was a 12 MB ceiling against a
+4.8 MB source string: the string exhausted the JS heap. That is a real bound,
+and it is not the bound the worker was there for.
+
+## Hitting the ceiling was not clean
+
+Worker threads share the process address space. Under a pooled test runner, a
+nested worker reaching its ceiling reliably took the host process down —
+reproduced three times out of three, as `Worker exited unexpectedly`. Standalone
+the parent survived, so this is not universal; it is enough to disqualify the
+mechanism as a safety net, because the failure it produced is the failure it
+existed to prevent.
+
+## What replaces it
+
+§10B.9's _intent_, by three bounds that were measured to work:
+
+| bound                          | what it covers       | why it works                                                                        |
+| ------------------------------ | -------------------- | ----------------------------------------------------------------------------------- |
+| `maxAssetBytes` (8 MB default) | enormous bundles     | the only thing that bounds native allocation, because RSS tracks input size at ~28x |
+| per-file time budget           | pathological bundles | checked inside the walk, so partial findings survive                                |
+| a parser that does not throw   | malformed bundles    | tree-sitter returns a partial tree; the analyzer catches the rest                   |
+
+**This is a deviation from §10B.9's stated mechanism, not from its
+requirement.** It is recorded here because the mechanism the plan named would
+have looked correct in review and in a green test suite, and would not have
+protected anything.

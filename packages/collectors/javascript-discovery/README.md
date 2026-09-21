@@ -13,13 +13,24 @@ The JavaScript asset graph (Tier A) and static analysis (Tier B).
   parser type appears in any exported signature, and a test asserts it.
 - **A tree-sitter implementation** of that interface.
 
+- **Asset triage** (§10B.3, §10B.7) — P0–P4, with runtime evidence overriding
+  naming. A vendor-looking file that drives the application's API outranks a
+  first-party file that did nothing.
+- **Content dedup and the analysis cache** (§10B.5, §10B.8), keyed on content
+  hash _and_ parser and rule versions, so a better rule invalidates its own
+  cache.
+- **Dynamic chunk discovery** (§10B.6), including preload hints — chunks the
+  application named for screens this scan never reached.
+- **Static ↔ runtime reconciliation** (§10A.3) — `observed`, `correlated`,
+  `unobserved`, with the static source kept after confirmation.
+- **The analysis bounds** (§10B.9): size, time, and a parser that does not
+  throw.
+
 ## Does not own
 
 - **Deciding whether a candidate is real.** §10A.3: a JavaScript candidate is
-  not an invoked API. Status is settled by runtime observation (BR-M2-12),
-  not here.
-- **Worker isolation and caching.** BR-M2-09 and BR-M2-10 wrap this; the
-  analyzer is a pure function of its input.
+  not an invoked API. Only the runtime settles it, and `reconcile` is where
+  the two meet.
 - **Semantics.** "This creates an order" is M4's inference.
 
 ## Two things the design turns on
@@ -37,6 +48,13 @@ labelled `partial` with a reason, and every endpoint before the break
 survives. That row is what decided the parser — see
 `docs/architecture/js-analysis-spike.md`, which records the measurement on
 7.29 MiB of real minified production JavaScript.
+
+**The size gate is the memory bound, and a worker is not.** §10B.9 suggests
+bounded workers. One was built and removed: a worker with a 16 MB V8 heap
+ceiling parsed a 4.8 MB bundle to completion while resident memory grew
+342 MB, because tree-sitter allocates natively. Capping input caps memory —
+RSS tracks source size at roughly 28x — and that is what `maxAssetBytes` does.
+See `docs/architecture/js-analysis-spike.md`.
 
 ## Dependency note
 
