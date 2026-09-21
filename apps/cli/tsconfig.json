@@ -8,7 +8,19 @@
   "exclude": ["src/**/*.test.ts"],
   "references": [
     {
+      "path": "../../packages/authorization"
+    },
+    {
+      "path": "../../packages/browser/deterministic-explorer"
+    },
+    {
       "path": "../../packages/browser/manager"
+    },
+    {
+      "path": "../../packages/browser/runner"
+    },
+    {
+      "path": "../../packages/collectors/network"
     },
     {
       "path": "../../packages/config"
@@ -23,10 +35,19 @@
       "path": "../../packages/events"
     },
     {
+      "path": "../../packages/exporters/json"
+    },
+    {
+      "path": "../../packages/exporters/markdown"
+    },
+    {
       "path": "../../packages/orchestrator"
     },
     {
       "path": "../../packages/policy"
+    },
+    {
+      "path": "../../packages/rate-controller"
     }
   ]
 }

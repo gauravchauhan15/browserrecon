@@ -17,7 +17,7 @@ import {
 } from "@browserrecon/browser-manager";
 import { startFixture, staticSite, restApi, type RunningFixture } from "@browserrecon/fixtures";
 import { PolicyEngine, defaultTargetPolicy, type TargetPolicy } from "@browserrecon/policy";
-import { PuppeteerBrowserAdapter } from "./puppeteer-adapter.js";
+import { PuppeteerBrowserAdapter, policyActionFor } from "./puppeteer-adapter.js";
 import { ADAPTER_ACTIONS, type ActionResult } from "./types.js";
 
 const probes: ChromeProbes = {
@@ -138,10 +138,16 @@ describe("every action asks the policy first", () => {
         await adapter.waitForSettled({ timeoutMs: 1_000 });
         await adapter.navigate(`${origin}/contact`);
         await adapter.type('input[name="email"]', "someone@example.com");
+        await adapter.harvest();
 
         const kinds = new Set(engine.asked.map((entry) => entry.kind));
         for (const action of ADAPTER_ACTIONS) {
-          expect(kinds, `${action} reached the page without a policy check`).toContain(action);
+          // The *policy's* name: `harvest` asks about `inspect_page`. What
+          // must hold is that something was asked, not that the two
+          // vocabularies happen to coincide.
+          expect(kinds, `${action} reached the page without a policy check`).toContain(
+            policyActionFor(action),
+          );
         }
       } finally {
         await adapter.close();

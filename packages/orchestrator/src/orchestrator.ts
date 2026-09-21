@@ -76,6 +76,14 @@ export interface ScanLimits {
   readonly maxRelaunches: number;
 }
 
+/** What to change, per reason the seed was refused. */
+const REMEDY_FOR_REFUSAL: Readonly<Record<string, string>> = {
+  out_of_scope: "Pass --allowed-origins with the origin you mean to scan.",
+  policy_denied:
+    "A policy rule refused the target. `--no-deny-loopback` allows 127.0.0.1 for a local development server; --excluded-paths controls the rest.",
+  not_http: "Targets must be http(s) URLs.",
+};
+
 /** A source that has not stopped in this long is not going to. */
 const DISCOVERY_STOP_GRACE_MS = 5_000;
 
@@ -103,6 +111,12 @@ export interface ScanResult {
   readonly pagesVisited: number;
   readonly candidatesDiscovered: number;
   readonly artifacts: readonly string[];
+  /** Queued URLs the browser did not load, with why. */
+  readonly notVisited: readonly {
+    readonly url: string;
+    readonly outcome: "denied" | "failed";
+    readonly detail?: string | undefined;
+  }[];
   /** The earliest thing that went wrong, for the summary's one-line reason. */
   readonly degradedBy?: PhaseOutcome | undefined;
 }
@@ -153,13 +167,18 @@ export async function runScan(input: ScanInput): Promise<ScanResult> {
   // and hands us a queue that already refuses out-of-scope URLs; what this
   // phase asserts is that it actually did.
   const policyStarted = new Date(clock.now()).toISOString();
-  if (input.queue.offer({ url: input.target, source: "seed", depth: 0 }) !== undefined) {
+  const seedRefusal = input.queue.offer({ url: input.target, source: "seed", depth: 0 });
+  if (seedRefusal !== undefined) {
     record(
       "policy",
       "failed",
       policyStarted,
-      `the target ${input.target} is refused by its own policy`,
-      "Check --allowed-origins and --excluded-paths; the scan would have visited nothing.",
+      // The queue's own reason, not a guess. A refusal that says "check
+      // --allowed-origins" when the cause was a loopback address sends the
+      // user to the wrong setting, which is worse than saying nothing.
+      `the target ${input.target} is refused by its own policy: ${seedRefusal.detail ?? seedRefusal.reason}`,
+      REMEDY_FOR_REFUSAL[seedRefusal.reason] ??
+        "Check the Target Policy with `browserrecon config validate <url>`; the scan would have visited nothing.",
     );
   }
   record("policy", "ok", policyStarted);
@@ -223,6 +242,8 @@ export async function runScan(input: ScanInput): Promise<ScanResult> {
   const browsingStarted = new Date(clock.now()).toISOString();
   let relaunches = 0;
   let browsingDetail: string | undefined;
+  /** Queued URLs the browser did not load, with why. */
+  const notVisited: { url: string; outcome: "denied" | "failed"; detail?: string }[] = [];
   let stopReason = "queue_empty";
 
   try {
@@ -268,6 +289,27 @@ export async function runScan(input: ScanInput): Promise<ScanResult> {
         });
         input.queue.markVisited(candidate.url);
         for (const found of result.discovered) input.queue.offer(found);
+
+        if (result.outcome !== "visited") {
+          // A page the browser never loaded is not a page visited. Counting
+          // it would let a scan that reached nothing report full coverage of
+          // everything it queued.
+          notVisited.push({
+            url: candidate.url,
+            outcome: result.outcome,
+            ...(result.detail === undefined ? {} : { detail: result.detail }),
+          });
+          if (result.outcome === "failed") {
+            const give = tracker.actionFailed();
+            if (give !== undefined) {
+              stopReason = give;
+              browsingDetail = `${input.limits.maxFailedActions} actions failed in a row`;
+              break;
+            }
+          }
+          continue;
+        }
+
         tracker.actionSucceeded();
       } catch (error) {
         if (error instanceof BrowserCrash) {
@@ -346,15 +388,37 @@ export async function runScan(input: ScanInput): Promise<ScanResult> {
       : "Discovery fell back to browser-native crawling; run `browserrecon doctor` to check the crawler.",
   );
 
+  // Every queued URL refused is a scan that did nothing, however cleanly it
+  // did it. Measured in the M1 gate: without this the run reported
+  // "complete · 1 of 1 discovered" for a site the browser never opened.
+  const everyPageRefused =
+    tracker.pagesVisited === 0 && notVisited.length > 0 && browsingDetail === undefined;
+  if (everyPageRefused) {
+    const first = notVisited[0];
+    browsingDetail =
+      `no page was loaded: all ${notVisited.length} queued URL(s) were ${first?.outcome ?? "refused"}` +
+      (first?.detail === undefined ? "" : ` (${first.detail})`);
+  }
+
+  const browsingDegraded = notVisited.length > 0 || relaunches > 0;
   record(
     "browsing",
-    browsingDetail === undefined ? (relaunches > 0 ? "degraded" : "ok") : "failed",
+    browsingDetail === undefined ? (browsingDegraded ? "degraded" : "ok") : "failed",
     browsingStarted,
     browsingDetail ??
-      (relaunches > 0 ? `the browser was relaunched ${relaunches} time(s)` : undefined),
+      (browsingDegraded
+        ? [
+            ...(relaunches > 0 ? [`the browser was relaunched ${relaunches} time(s)`] : []),
+            ...(notVisited.length > 0
+              ? [`${notVisited.length} queued URL(s) were not loaded`]
+              : []),
+          ].join("; ")
+        : undefined),
     browsingDetail === undefined
       ? undefined
-      : "Re-run, or resume this session once the target is stable.",
+      : everyPageRefused
+        ? "No page was loaded. Check the Target Policy: --allowed-origins, --no-deny-loopback (for a local server) and --excluded-paths all decide what may be visited."
+        : "Re-run, or resume this session once the target is stable.",
   );
 
   try {
@@ -416,6 +480,7 @@ export async function runScan(input: ScanInput): Promise<ScanResult> {
     pagesVisited: tracker.pagesVisited,
     candidatesDiscovered: discovered + input.queue.visited.length,
     artifacts,
+    notVisited,
     degradedBy: primaryDegradation(outcomes),
   };
 }

@@ -93,6 +93,37 @@ jobs:
       - name: Schemas match their TypeScript source
         run: pnpm run schemas:check
 
+  # The milestone gate runs as its own job so a failure says "V1's claim
+  # does not hold" rather than being one red line among thirteen hundred.
+  # It also runs inside `verify`, which is what keeps it from rotting — a
+  # gate only CI runs is a gate nobody notices breaking locally.
+  gate:
+    name: milestone gate (browser, headless)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      # The gate drives the CLI end to end, which needs the workspace built.
+      - run: pnpm run build
+
+      # ubuntu-latest ships Google Chrome. The gate's precondition test
+      # fails rather than skips when CI has none, so a runner image that
+      # drops it is loud instead of quietly turning the gate off.
+      - name: Which Chrome the gate will drive
+        run: google-chrome --version || chromium --version || true
+
+      - name: M1 gate
+        run: pnpm exec vitest run tests/gate --testTimeout=300000
+
   secrets:
     name: secret scan (full history)
     runs-on: ubuntu-latest

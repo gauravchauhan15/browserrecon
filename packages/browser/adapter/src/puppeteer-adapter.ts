@@ -45,7 +45,9 @@ import {
   type AdapterAction,
   type BrowserAdapter,
   type FailureKind,
+  type HarvestedForm,
   type NavigationOutcome,
+  type PageHarvest,
   type ScrollDirection,
   type SettledOutcome,
 } from "./types.js";
@@ -67,6 +69,72 @@ const DEFAULT_SETTLE_TIMEOUT_MS = 5_000;
  * opaque escapes. A call that can hang forever breaks both, whatever the
  * driver's excuse, so the budget is enforced here rather than hoped for.
  */
+/**
+ * Read links and forms from the live document.
+ *
+ * Runs inside the page, so it must be self-contained. `href` and `action`
+ * are read from the DOM properties rather than the attributes, because the
+ * properties are already resolved against the document's base URL — an
+ * attribute of `../cart` is not comparable with anything.
+ *
+ * Field *values* are never read. §37.1: the typed content of a form is the
+ * user's, and a recon tool has no reason to carry it.
+ */
+/**
+ * Adapter actions whose policy name differs.
+ *
+ * Only reads appear here. An action that changes state must never be mapped
+ * onto a gentler name: the mapping exists to avoid synonyms, not to soften
+ * what a call does.
+ */
+const POLICY_ACTION: Readonly<Partial<Record<AdapterAction, string>>> = {
+  harvest: "inspect_page",
+};
+
+/**
+ * The policy's name for an adapter action.
+ *
+ * Exported so the boundary tests can check *the mapped name* against
+ * `PERMITTED_ACTIONS`. Without it those tests compared the adapter's
+ * vocabulary against the policy's directly, and adding a mapping would have
+ * turned a working drift guard into a failing one — which is a fine outcome
+ * for the person who added it and a bad one for the guard.
+ */
+export function policyActionFor(action: AdapterAction): string {
+  return POLICY_ACTION[action] ?? action;
+}
+
+function readHarvest(): { links: string[]; forms: HarvestedForm[] } {
+  const links: string[] = [];
+  const seen = new Set<string>();
+  for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
+    const href = (anchor as HTMLAnchorElement).href;
+    if (href === "" || seen.has(href)) continue;
+    seen.add(href);
+    links.push(href);
+  }
+
+  const forms = Array.from(document.querySelectorAll("form")).map((form) => {
+    const element = form as HTMLFormElement;
+    const submit = element.querySelector(
+      "button[type=submit], button:not([type]), input[type=submit]",
+    );
+    return {
+      id: element.id === "" ? undefined : element.id,
+      method: (element.method === "" ? "get" : element.method).toUpperCase(),
+      action: element.action,
+      fields: Array.from(element.querySelectorAll("input, select, textarea")).map((field) => ({
+        name: (field as HTMLInputElement).name,
+        type: (field as HTMLInputElement).type ?? field.tagName.toLowerCase(),
+      })),
+      submitText:
+        submit?.textContent?.trim() ?? (submit as HTMLInputElement | null)?.value ?? undefined,
+    };
+  });
+
+  return { links, forms };
+}
+
 function withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -242,7 +310,13 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
     proposal: { url?: string | undefined; stateChanging?: boolean | undefined },
   ): ActionResult<never> | undefined {
     const decision: Decision = this.#engine.canAct({
-      kind: action,
+      // The policy has its own vocabulary and this one is the adapter's;
+      // where they differ the adapter maps rather than the policy grows a
+      // synonym. `harvest` reads the page, which the policy already calls
+      // `inspect_page` — adding "harvest" to PERMITTED_ACTIONS would give
+      // one capability two names, and the next reader would have to work
+      // out whether they mean different things.
+      kind: policyActionFor(action),
       ...(proposal.url === undefined ? {} : { url: proposal.url }),
       ...(proposal.stateChanging === undefined
         ? {}
@@ -416,6 +490,28 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
     } catch (error) {
       const { kind, detail } = classify(error);
       return failed("back", kind, detail);
+    }
+  }
+
+  async harvest(options: ActionOptions = {}): Promise<ActionResult<PageHarvest>> {
+    const refusal = this.#check("harvest", { ...options });
+    if (refusal) return refusal;
+
+    const timeout = options.timeoutMs ?? this.#timeout;
+    try {
+      // `evaluate` is given a function, never a string. Puppeteer evaluates
+      // a string as an *expression*, which silently returns the function
+      // itself rather than calling it — a mistake that surfaces two layers
+      // away as an empty result.
+      const harvested = await withDeadline(
+        this.#page.evaluate(readHarvest),
+        timeout,
+        "harvest",
+      );
+      return ok({ ...harvested, url: this.#page.url() });
+    } catch (error) {
+      const { kind, detail } = classify(error);
+      return failed("harvest", kind, detail);
     }
   }
 

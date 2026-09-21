@@ -28,6 +28,7 @@ import type {
   BrowserAdapter,
   NavigationOutcome,
   ScrollDirection,
+  PageHarvest,
   SettledOutcome,
 } from "@browserrecon/browser-adapter";
 import type { EventBus } from "@browserrecon/events";
@@ -236,6 +237,12 @@ export function recordInteractions(options: RecordOptions): RecordingAdapter {
     // Waiting is not an interaction: it changes nothing, and recording it
     // would put an event between a click and the requests it caused, which is
     // precisely the sequence §15 reads.
+    // Observations pass straight through, unrecorded: harvesting reads the
+    // page and changes nothing, so recording it as an interaction would put
+    // a step in every workflow that the user never took.
+    harvest: async (actionOptions?: ActionOptions): Promise<ActionResult<PageHarvest>> =>
+      options.adapter.harvest(actionOptions),
+
     waitForSettled: async (
       actionOptions?: ActionOptions,
     ): Promise<ActionResult<SettledOutcome>> => options.adapter.waitForSettled(actionOptions),

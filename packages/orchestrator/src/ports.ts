@@ -65,6 +65,19 @@ export interface VisitContext {
 }
 
 export interface VisitResult {
+  /**
+   * Whether the page was actually loaded.
+   *
+   * Not inferable from the other fields, and getting it wrong is not a
+   * cosmetic error. Measured: a runner that returned `{discovered: [],
+   * requests: 0}` for a policy denial made the orchestrator count a page it
+   * never fetched, and the scan reported "complete, 1 page visited" against
+   * a site the browser had not opened. A scan that silently reports success
+   * for work it did not do is worse than one that fails.
+   */
+  readonly outcome: "visited" | "denied" | "failed";
+  /** Why, when the outcome is not `visited`. Surfaced, never swallowed. */
+  readonly detail?: string | undefined;
   /** URLs found on the page, fed straight back into the queue. */
   readonly discovered: readonly Candidate[];
   readonly requests: number;

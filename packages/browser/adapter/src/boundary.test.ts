@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ADAPTER_ACTIONS } from "./types.js";
+import { policyActionFor } from "./puppeteer-adapter.js";
 import { PERMITTED_ACTIONS } from "@browserrecon/policy";
 
 /**
@@ -56,8 +57,8 @@ describe("actions line up with the policy's vocabulary", () => {
     for (const action of ADAPTER_ACTIONS) {
       expect(
         PERMITTED_ACTIONS as readonly string[],
-        `the engine does not recognise "${action}"`,
-      ).toContain(action);
+        `the engine does not recognise "${policyActionFor(action)}" (for adapter action "${action}")`,
+      ).toContain(policyActionFor(action));
     }
   });
 });

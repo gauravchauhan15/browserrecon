@@ -141,3 +141,55 @@ the signal through) would hang the scan at the _join_, after every page had
 been visited and with every artifact still unwritten. Both the loop's wait
 and the join are now time-boxed, and a source that will not stop is recorded
 as a degradation rather than waited on.
+
+### What is stable across runs, and what is not (BR-M1-31)
+
+Measured across three consecutive scans of the same fixture:
+
+- **Identical:** the number of events (63), the event-type histogram, the
+  exported attack surface, and the report — byte for byte after masking the
+  ephemeral port, the session path and the duration.
+- **Not identical:** the _interleaving_ of the first few events. Chrome
+  reports its startup targets in a nondeterministic order, so a given
+  request can land on a different envelope sequence from one run to the
+  next.
+
+The consequence is that `source_event_ids` may differ between runs for the
+same request, while always resolving correctly inside the run that produced
+them. The M1 gate therefore asserts the two things that are actually true —
+the event log's _content_ is stable, and every cited id resolves in its own
+log — rather than masking the ids and calling the result "deterministic".
+
+### The exported model must not carry CDP handles
+
+Exporting the network collector's model directly put Chrome's `requestId`
+and `frameId` into `attack-surface.json`. Three runs of the same scan
+produced three different documents, and the handles are unresolvable outside
+the CDP session that issued them: a consumer cannot look one up and a
+reviewer cannot diff one. The exporter now maps observations onto
+`ExportedApi` with deterministic `api_NNNN` ids and `source_event_ids` that
+point into `events.jsonl`, and validates the document against its own schema
+before writing it.
+
+### A sitemap can name any host, so discovery must check before it fetches
+
+A sitemap index lists other sitemaps, and those URLs come from the target's
+response. Browser-native discovery fetched them unchecked, which is a
+request the user never authorized, made from their machine, at a URL the
+target chose — reachable at `169.254.169.254` or anything on the operator's
+network. The policy check is now required rather than optional on that port,
+and `robots.txt` itself is checked too.
+
+### A scan reported success for a site it never opened
+
+Found by the gate, not by review. With loopback denied (the default) every
+URL was refused by the adapter, the runner returned `{discovered: [],
+requests: 0}`, and the orchestrator counted a visited page: the scan printed
+"complete · 1 of 1 discovered", wrote artifacts and exited 0.
+
+Three causes, all fixed: the runner swallowed a policy denial as an empty
+success; `VisitResult` had no way to say "not loaded"; and the queue used a
+hand-rolled scope check that accepted a URL the adapter then refused. The
+queue and the adapter now share one `PolicyEngine`, a visit reports its
+outcome explicitly, and a browsing phase that loaded nothing is a failure
+with a remedy naming the setting that caused it.

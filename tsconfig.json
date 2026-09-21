@@ -18,6 +18,9 @@
       "path": "./packages/browser/manager"
     },
     {
+      "path": "./packages/browser/runner"
+    },
+    {
       "path": "./packages/browser/telemetry-cdp"
     },
     {
@@ -88,6 +91,9 @@
     },
     {
       "path": "./packages/test-utils"
+    },
+    {
+      "path": "./tests/gate"
     },
     {
       "path": "./tests/golden"

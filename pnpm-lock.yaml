@@ -133,27 +133,48 @@ importers:
 
   apps/cli:
     dependencies:
+      '@browserrecon/authorization':
+        specifier: workspace:*
+        version: link:../../packages/authorization
       '@browserrecon/browser-manager':
         specifier: workspace:*
         version: link:../../packages/browser/manager
+      '@browserrecon/browser-runner':
+        specifier: workspace:*
+        version: link:../../packages/browser/runner
+      '@browserrecon/collector-network':
+        specifier: workspace:*
+        version: link:../../packages/collectors/network
       '@browserrecon/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@browserrecon/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@browserrecon/deterministic-explorer':
+        specifier: workspace:*
+        version: link:../../packages/browser/deterministic-explorer
       '@browserrecon/event-store':
         specifier: workspace:*
         version: link:../../packages/event-store
       '@browserrecon/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@browserrecon/exporter-json':
+        specifier: workspace:*
+        version: link:../../packages/exporters/json
+      '@browserrecon/exporter-markdown':
+        specifier: workspace:*
+        version: link:../../packages/exporters/markdown
       '@browserrecon/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
       '@browserrecon/policy':
         specifier: workspace:*
         version: link:../../packages/policy
+      '@browserrecon/rate-controller':
+        specifier: workspace:*
+        version: link:../../packages/rate-controller
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -219,6 +240,39 @@ importers:
       '@browserrecon/fixtures':
         specifier: workspace:*
         version: link:../../fixtures
+
+  packages/browser/runner:
+    dependencies:
+      '@browserrecon/browser-adapter':
+        specifier: workspace:*
+        version: link:../adapter
+      '@browserrecon/browser-manager':
+        specifier: workspace:*
+        version: link:../manager
+      '@browserrecon/collector-network':
+        specifier: workspace:*
+        version: link:../../collectors/network
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@browserrecon/deterministic-explorer':
+        specifier: workspace:*
+        version: link:../deterministic-explorer
+      '@browserrecon/discovery-external':
+        specifier: workspace:*
+        version: link:../../discovery/external
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../events
+      '@browserrecon/policy':
+        specifier: workspace:*
+        version: link:../../policy
+      '@browserrecon/rate-controller':
+        specifier: workspace:*
+        version: link:../../rate-controller
+      '@browserrecon/telemetry-cdp':
+        specifier: workspace:*
+        version: link:../telemetry-cdp
 
   packages/browser/telemetry-cdp:
     dependencies:
@@ -470,6 +524,27 @@ importers:
         version: link:../policy
 
   packages/test-utils: {}
+
+  tests/gate:
+    dependencies:
+      '@browserrecon/browser-manager':
+        specifier: workspace:*
+        version: link:../../packages/browser/manager
+      '@browserrecon/cli':
+        specifier: workspace:*
+        version: link:../../apps/cli
+      '@browserrecon/event-store':
+        specifier: workspace:*
+        version: link:../../packages/event-store
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@browserrecon/fixtures':
+        specifier: workspace:*
+        version: link:../../packages/fixtures
+      '@browserrecon/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
 
   tests/golden:
     dependencies:

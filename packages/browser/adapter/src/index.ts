@@ -17,6 +17,7 @@
 export const PACKAGE_NAME = "@browserrecon/browser-adapter" as const;
 
 export { ADAPTER_ACTIONS, FAILURE_KINDS, denied, failed, ok } from "./types.js";
+export type { HarvestedForm, PageHarvest } from "./types.js";
 export type {
   ActionOptions,
   ActionResult,
@@ -31,5 +32,9 @@ export type {
 export { inferStateChanging, resolveStateChanging } from "./state-changing.js";
 export type { AncestorStep, ElementFacts, StateChangeVerdict } from "./state-changing.js";
 
-export { PuppeteerBrowserAdapter, createBrowserAdapter } from "./puppeteer-adapter.js";
+export {
+  PuppeteerBrowserAdapter,
+  createBrowserAdapter,
+  policyActionFor,
+} from "./puppeteer-adapter.js";
 export type { PuppeteerAdapterOptions } from "./puppeteer-adapter.js";

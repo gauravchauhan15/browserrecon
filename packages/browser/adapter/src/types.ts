@@ -28,7 +28,15 @@ import type { BarrierCategory, DenialReason } from "@browserrecon/policy";
 import type { ElementFacts } from "./state-changing.js";
 
 /** Actions the adapter can perform. A subset of the policy's permitted set. */
-export const ADAPTER_ACTIONS = ["navigate", "click", "type", "scroll", "back", "wait"] as const;
+export const ADAPTER_ACTIONS = [
+  "navigate",
+  "click",
+  "type",
+  "scroll",
+  "back",
+  "wait",
+  "harvest",
+] as const;
 
 export type AdapterAction = (typeof ADAPTER_ACTIONS)[number];
 
@@ -75,6 +83,24 @@ export interface NavigationOutcome {
   readonly httpStatus?: number | undefined;
   /** True when the final URL differs from the one requested. */
   readonly redirected: boolean;
+}
+
+/** Links and forms as they exist in the page right now. */
+export interface PageHarvest {
+  /** Absolute URLs, deduplicated, in document order. */
+  readonly links: readonly string[];
+  readonly forms: readonly HarvestedForm[];
+  /** The URL these were read from, which may differ from the one requested. */
+  readonly url: string;
+}
+
+export interface HarvestedForm {
+  readonly id?: string | undefined;
+  readonly method: string;
+  /** Resolved against the page, so it is comparable with a link. */
+  readonly action: string;
+  readonly fields: readonly { readonly name: string; readonly type: string }[];
+  readonly submitText?: string | undefined;
 }
 
 export interface SettledOutcome {
@@ -127,6 +153,15 @@ export interface BrowserAdapter {
   back(options?: ActionOptions): Promise<ActionResult<NavigationOutcome>>;
   /** Wait for the page to stop changing, so observation sees a stable state. */
   waitForSettled(options?: ActionOptions): Promise<ActionResult<SettledOutcome>>;
+  /**
+   * Read what the page currently offers: links and forms.
+   *
+   * An observation, not an action. It goes through the adapter rather than a
+   * raw page handle because §32.10 confines the driver to this boundary —
+   * and because reading the *live* DOM is the whole point. The markup a
+   * crawler fetches for `dynamic-site` has two links; the page has six.
+   */
+  harvest(options?: ActionOptions): Promise<ActionResult<PageHarvest>>;
   /** Release the page. Does not close the browser — the manager owns that. */
   close(): Promise<void>;
 }

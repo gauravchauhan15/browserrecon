@@ -65,7 +65,6 @@ describe("exit codes", () => {
 
 describe("unimplemented commands", () => {
   it.each([
-    ["scan", ["scan", "https://shop.example.com"]],
     ["agent", ["agent", "https://shop.example.com"]],
     ["export", ["export", "sess_0001"]],
   ] as const)("%s fails clearly rather than doing nothing", async (_name, argv) => {
@@ -76,10 +75,12 @@ describe("unimplemented commands", () => {
     expect(err).toContain("not implemented");
   });
 
-  it("says what it is waiting on and what to try instead", async () => {
-    const { err } = await invoke(["scan", "https://shop.example.com"]);
-    expect(err).toContain("runtime collection is still being built");
-    expect(err).toContain("config validate");
+  it("scan refuses without authorization rather than doing nothing", async () => {
+    // `scan` is implemented now. What it must not do is start: with no
+    // terminal to ask in and no --i-am-authorized, §7.4 says refuse.
+    const { code, err } = await invoke(["scan", "https://shop.example.com"]);
+    expect(code).toBe(EXIT_CODES.authorization);
+    expect(err).toMatch(/authoriz/i);
   });
 
   it("resume validates the session before refusing", async () => {

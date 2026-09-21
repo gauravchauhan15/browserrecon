@@ -116,7 +116,7 @@ function fakeBrowser(
       const outcome = behaviour(candidate.url, visited.length);
       visited.push(candidate.url);
       if (outcome instanceof Error) throw outcome;
-      return { discovered: outcome, requests: 1 };
+      return { outcome: "visited", discovered: outcome, requests: 1 };
     },
     async close() {},
   };
@@ -568,7 +568,11 @@ describe("one shared rate budget", () => {
       launch: () => Promise.resolve(),
       visit: (context) => {
         seen.add(context.bucket);
-        return Promise.resolve({ discovered: [], requests: 1 });
+        return Promise.resolve({
+          outcome: "visited" as const,
+          discovered: [],
+          requests: 1,
+        });
       },
       close: () => Promise.resolve(),
     };
@@ -731,5 +735,79 @@ describe("a discovery source that ignores its signal", () => {
     expect(result.phases.find((p) => p.phase === "discovery")?.detail).toContain(
       "did not stop",
     );
+  });
+});
+
+describe("a page that was not loaded is not a page visited", () => {
+  const refusing = (outcome: "denied" | "failed"): BrowsingPort => ({
+    launch: () => Promise.resolve(),
+    visit: () =>
+      Promise.resolve({ outcome, detail: "loopback_denied", discovered: [], requests: 0 }),
+    close: () => Promise.resolve(),
+  });
+
+  it("does not count a refused URL as a visit", async () => {
+    // Measured in the M1 gate: a runner that returned an empty success for
+    // a policy denial made this report "complete · 1 of 1 discovered" for a
+    // site the browser never opened, and exit 0.
+    const result = await runScan(scanInput({ browsing: refusing("denied") }));
+    expect(result.pagesVisited).toBe(0);
+  });
+
+  it("calls a scan that loaded nothing a failure, not an empty success", async () => {
+    const result = await runScan(scanInput({ browsing: refusing("denied") }));
+
+    expect(result.completeness).toBe("partial");
+    expect(phaseStatus(result, "browsing")).toBe("failed");
+    expect(result.degradedBy?.detail).toContain("no page was loaded");
+  });
+
+  it("names the setting that caused it", async () => {
+    // "The scan found nothing" sends a user looking at their target. The
+    // cause was their own policy, and the remedy has to say so.
+    const result = await runScan(scanInput({ browsing: refusing("denied") }));
+    expect(result.degradedBy?.remedy).toContain("--allowed-origins");
+    expect(result.degradedBy?.remedy).toContain("--allow");
+  });
+
+  it("still exports, so the session is inspectable", async () => {
+    const result = await runScan(scanInput({ browsing: refusing("denied") }));
+    expect(phaseStatus(result, "export")).toBe("ok");
+  });
+
+  it("reports which URLs were not loaded, and why", async () => {
+    const result = await runScan(scanInput({ browsing: refusing("denied") }));
+    expect(result.notVisited).toEqual([
+      { url: "https://shop.example.com/", outcome: "denied", detail: "loopback_denied" },
+    ]);
+  });
+
+  it("degrades rather than fails when only some URLs were refused", async () => {
+    let first = true;
+    const mixed: BrowsingPort = {
+      launch: () => Promise.resolve(),
+      visit: () => {
+        if (first) {
+          first = false;
+          return Promise.resolve({
+            outcome: "visited" as const,
+            discovered: [page("https://shop.example.com/a")],
+            requests: 1,
+          });
+        }
+        return Promise.resolve({
+          outcome: "denied" as const,
+          detail: "excluded_path",
+          discovered: [],
+          requests: 0,
+        });
+      },
+      close: () => Promise.resolve(),
+    };
+
+    const result = await runScan(scanInput({ browsing: mixed }));
+    expect(result.pagesVisited).toBe(1);
+    expect(phaseStatus(result, "browsing")).toBe("degraded");
+    expect(result.completeness).toBe("partial");
   });
 });

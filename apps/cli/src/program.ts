@@ -22,6 +22,7 @@ import { addSpecOptions } from "./options.js";
 import { configValidate } from "./commands/config.js";
 import { doctor } from "./commands/doctor.js";
 import { resume as resumeSession } from "./commands/resume.js";
+import { scan as runScanCommand } from "./commands/scan.js";
 
 /** Injected so tests capture output instead of writing to the terminal. */
 export interface ProgramIo {
@@ -98,7 +99,25 @@ export function buildProgram(io: ProgramIo, argv: readonly string[] = []): Comma
     .command("scan")
     .description("deterministic runtime reconnaissance (observe and analyse only)")
     .argument("<url>", "target origin to scan")
-    .action(() => notImplemented("scan"));
+    .action(async (url: string, _options: unknown, command: Command) => {
+      const top = program.opts();
+      await runScanCommand({
+        target: url,
+        parsed: command.opts(),
+        argv,
+        env: io.env,
+        configFile: top.config as string | undefined,
+        quiet: top.quiet === true,
+        json: top.json === true,
+        authorized: top.iAmAuthorized === true,
+        // A terminal the user is actually at. `isTTY` is the only honest
+        // signal available, and getting it wrong in the permissive
+        // direction means a CI job hangs on a prompt nobody sees.
+        interactive: process.stdin.isTTY === true && process.stdout.isTTY === true,
+        write: io.out,
+        warn: io.err,
+      });
+    });
   addSpecOptions(scan, CONFIG_SPEC);
   addSpecOptions(scan, POLICY_SPEC);
 

@@ -51,11 +51,19 @@ export const POLICY_SPEC: ConfigSpec = [
     cli: "allowed-methods",
   }),
 
+  // Exposed on the command line because scanning a local development
+  // server is a real, ordinary thing to want, and the alternative — a
+  // config file for a one-off `--no-deny-loopback` — pushes people towards
+  // turning the protection off permanently. It stays default-on and it
+  // stays named for what it does: `--no-deny-loopback` is a mouthful, and
+  // a mouthful is the right amount of friction for reaching 127.0.0.1.
   bool("policy.network.denyLoopback", "Refuse to reach 127.0.0.0/8 and ::1.", {
     default: true,
+    cli: "deny-loopback",
   }),
   bool("policy.network.denyPrivateRanges", "Refuse to reach RFC 1918 addresses.", {
     default: true,
+    cli: "deny-private-ranges",
   }),
   bool("policy.network.denyLinkLocal", "Refuse to reach 169.254.0.0/16 and fe80::/10.", {
     default: true,
