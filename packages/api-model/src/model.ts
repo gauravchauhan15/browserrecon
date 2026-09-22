@@ -34,6 +34,7 @@ import {
   type ObservedParameter,
 } from "./identity.js";
 import { ShapeBuilder, type PayloadShape } from "./payload.js";
+import { dependenciesFor, extractIdentifiers, valuesIn, type FlowSource } from "./flow.js";
 import {
   buildInitiatorChain,
   reduceRelationships,
@@ -195,6 +196,14 @@ export function buildApiModel(
 
   /** Times each method+identity has been seen, for §17A.2's repeat signal. */
   const seenCount = new Map<string, number>();
+  /**
+   * Identifiers each response carried, and what each request carried forward.
+   *
+   * Values live here for the duration of the build and are never exported —
+   * `depends_on` records the field that flowed, not what was in it.
+   */
+  const flowSources: FlowSource[] = [];
+  const consumers: { apiId: string; sequence: number; candidates: readonly string[] }[] = [];
   const currentPage = {
     url: undefined as string | undefined,
     navigationId: undefined as string | undefined,
@@ -314,6 +323,49 @@ export function buildApiModel(
       bucket.sawResponseBody = true;
       bucket.response.add(payload.body.text, payload.mimeType);
     }
+
+    // §15's structural alternative to guessing from adjacency. Recorded per
+    // observation rather than per endpoint, because which call produced a
+    // value is what makes the edge checkable.
+    consumers.push({
+      apiId: identity.key,
+      sequence: request.envelope.sequence,
+      candidates: valuesIn(request.url.raw, request.payload.postData),
+    });
+    if (payload.body?.text !== undefined && payload.body.text.length <= 256 * 1024) {
+      const values = extractIdentifiers(payload.body.text);
+      if (values.length > 0) {
+        flowSources.push({ apiId: identity.key, sequence: envelope.sequence, values });
+      }
+    }
+  }
+
+  // Identity keys are stable within a build; api_ids are assigned by first
+  // appearance, so the edges are translated after numbering rather than
+  // during, when the numbers do not exist yet.
+  const idForKey = new Map(
+    order.map((key, index) => [key, `api_${String(index + 1).padStart(4, "0")}`]),
+  );
+  const named = (key: string): string => idForKey.get(key) ?? key;
+
+  const dependsOnByKey = new Map<string, Relationship[]>();
+  for (const consumer of consumers) {
+    const edges = dependenciesFor(
+      { apiId: consumer.apiId, sequence: consumer.sequence, candidates: consumer.candidates },
+      flowSources,
+    ).map((edge) => ({
+      ...edge,
+      target: `api:${named(edge.target.replace(/^api:/, ""))}`,
+      basis: edge.basis.replace(
+        /from ([^']+)'s response/,
+        (_match, key: string) => `from ${named(key)}'s response`,
+      ),
+    }));
+    if (edges.length === 0) continue;
+    dependsOnByKey.set(consumer.apiId, [
+      ...(dependsOnByKey.get(consumer.apiId) ?? []),
+      ...edges,
+    ]);
   }
 
   const apis = order.map((key, index): ApiObject => {
@@ -332,7 +384,7 @@ export function buildApiModel(
       ...(bucket.sawRequestBody ? { requestShape: bucket.request.snapshot() } : {}),
       ...(bucket.sawResponseBody ? { responseShape: bucket.response.snapshot() } : {}),
       caused_by: reduceRelationships(causedBy(bucket, first)),
-      depends_on: [],
+      depends_on: reduceRelationships(dependsOnByKey.get(key) ?? []),
       source_event_ids: bucket.sourceEventIds,
       provenance: "observed",
     };

@@ -314,7 +314,7 @@ describe("parsing a test data profile", () => {
     // inline secret in one is worse than in an auth profile.
     const result = parseTestDataProfile({
       ...base,
-      fields: [{ match: { name_pattern: "key" }, value: "sk_live_4eC39HqLyjWDarjtT1zdp7dc" }],
+      fields: [{ match: { name_pattern: "key" }, value: "sk_live_abcdefghijklmnopqrstuvwxyz" }],
     });
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -337,8 +337,8 @@ describe("parsing a test data profile", () => {
 
   it("recognises the shapes that are only ever real", () => {
     for (const value of [
-      "sk_live_4eC39HqLyjWDarjtT1zdp7dc",
-      "ghp_016c75a9d2ee4b8e9f0a1b2c3d4e5f6a7b8c",
+      "sk_live_abcdefghijklmnopqrstuvwxyz",
+      "ghp_abcdefghijABCDEFGHIJabcdefghijABCD",
       "AKIAIOSFODNN7EXAMPLE",
       "-----BEGIN RSA PRIVATE KEY-----",
     ]) {

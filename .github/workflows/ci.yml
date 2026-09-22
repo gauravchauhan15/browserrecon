@@ -121,7 +121,7 @@ jobs:
       - name: Which Chrome the gate will drive
         run: google-chrome --version || chromium --version || true
 
-      - name: M1 gate
+      - name: Milestone gates
         run: pnpm exec vitest run tests/gate --testTimeout=300000
 
   secrets:

@@ -110,6 +110,17 @@ const PROBE_PATHS: Readonly<Record<string, readonly [string, string][]>> = {
     ["GET", "/vendor/px.gif"],
     ["GET", "/vendor/rum"],
   ],
+  "parallel-site": [
+    ["GET", "/"],
+    ["GET", "/chain"],
+    ["GET", "/api/cart"],
+    ["GET", "/api/user"],
+    ["GET", "/api/config"],
+    ["GET", "/api/notifications"],
+    ["POST", "/api/orders"],
+    ["GET", "/api/orders/8f14e45fceea167a5a36dedd4bea2543"],
+    ["GET", "/api/orders/8f14e45fceea167a5a36dedd4bea2543/receipt"],
+  ],
   "webmcp-site": [
     ["GET", "/"],
     ["GET", "/api/products/search"],

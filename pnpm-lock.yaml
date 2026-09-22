@@ -560,12 +560,21 @@ importers:
 
   tests/gate:
     dependencies:
+      '@browserrecon/api-model':
+        specifier: workspace:*
+        version: link:../../packages/api-model
+      '@browserrecon/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@browserrecon/browser-manager':
         specifier: workspace:*
         version: link:../../packages/browser/manager
       '@browserrecon/cli':
         specifier: workspace:*
         version: link:../../apps/cli
+      '@browserrecon/collector-javascript-discovery':
+        specifier: workspace:*
+        version: link:../../packages/collectors/javascript-discovery
       '@browserrecon/event-store':
         specifier: workspace:*
         version: link:../../packages/event-store

@@ -43,4 +43,23 @@ regexes = [
   '''AKIAIOSFODNN7EXAMPLE''',
   # The jwt.io sample token, used to test JWT detection.
   '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.''',
+  # RFC 6238 Appendix B's published TOTP test secret: base32 of the ASCII
+  # "12345678901234567890". The TOTP implementation is checked against the
+  # RFC's own vectors, which is not possible without the RFC's own secret —
+  # and a value printed in an IETF standard is not a credential anywhere.
+  '''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''',
+  # Two fabricated tokens committed in 2beaaa5, before the fixtures were
+  # rewritten to use the sequential-alphabet filler above. They remain in
+  # history, which this scan covers, so they are matched by value here.
+  #
+  # Neither is real. The Stripe one is Stripe's own documented example test
+  # key with `test` swapped for `live` — the suffix is published, the prefix
+  # was never issued. The GitHub one was typed at random for a test asserting
+  # that `looksLikeLiveSecret` recognises the shape.
+  #
+  # Listed rather than rewritten out of history: the commit is pushed, and
+  # rewriting shared history to hide two fabricated strings would be a larger
+  # and more dangerous act than naming them.
+  '''sk_live_4eC39HqLyjWDarjtT1zdp7dc''',
+  '''ghp_016c75a9d2ee4b8e9f0a1b2c3d4e5f6a7b8c''',
 ]

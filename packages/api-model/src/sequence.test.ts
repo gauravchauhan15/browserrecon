@@ -242,3 +242,130 @@ describe("determinism", () => {
     expect(JSON.stringify(sequencesOf(events))).toBe(JSON.stringify(sequencesOf(events)));
   });
 });
+
+describe("depends_on is built from value flow, not adjacency", () => {
+  const withBody = (path: string, body: string, method = "GET") => {
+    const requestId = `r${sequence + 1}`;
+    const url = `${ORIGIN}${path}`;
+    return [
+      event("network_request", {
+        requestId,
+        url,
+        method,
+        resourceType: "fetch",
+        initiator: { type: "script" },
+      }),
+      event("network_response", {
+        requestId,
+        url,
+        status: 200,
+        mimeType: "application/json",
+        body: { text: body },
+      }),
+    ];
+  };
+
+  it("finds the edge when an identifier flows forward", () => {
+    // §15's honest alternative to guessing from adjacency: the second
+    // request could not have been built without the first's answer.
+    const id = "8f14e45fceea167a5a36dedd4bea2543";
+    const model = buildApiModel(
+      [
+        ...withBody("/api/cart", JSON.stringify({ cart_id: id }), "POST"),
+        ...withBody(`/api/cart/${id}`, "{}"),
+      ],
+      { firstPartyOrigins: [ORIGIN] },
+    );
+
+    const consumer = model.apis.find((api) => api.url.includes("{"));
+    expect(consumer?.depends_on).toHaveLength(1);
+    expect(consumer?.depends_on[0]?.kind).toBe("inferred");
+  });
+
+  it("names the field, never the value", () => {
+    const id = "8f14e45fceea167a5a36dedd4bea2543";
+    const model = buildApiModel(
+      [
+        ...withBody("/api/cart", JSON.stringify({ cart_id: id }), "POST"),
+        ...withBody(`/api/cart/${id}`, "{}"),
+      ],
+      { firstPartyOrigins: [ORIGIN] },
+    );
+    const bases = model.apis.flatMap((api) => api.depends_on.map((e) => e.basis)).join(" ");
+
+    expect(bases).toContain("cart_id");
+    expect(bases).not.toContain(id);
+  });
+
+  it("finds no edge between requests that share nothing", () => {
+    const model = buildApiModel(
+      [...withBody("/api/one", '{"id":"aaaaaaaaaaaaaaaa"}'), ...withBody("/api/two", "{}")],
+      { firstPartyOrigins: [ORIGIN] },
+    );
+    for (const api of model.apis) expect(api.depends_on, api.url).toEqual([]);
+  });
+
+  it("does not follow a token, however id-shaped", () => {
+    // A token in a later URL is a finding about the application, not a
+    // dependency — and following it would mean holding the token in memory
+    // to do string comparisons with.
+    //
+    // The first version of this test used `/api/login`, which the traffic
+    // classifier excludes as `auth_infrastructure` before the model is
+    // built — so it passed whether or not the token rule existed. Both
+    // endpoints here are ordinary application traffic, which is what makes
+    // the rule the thing under test.
+    const token = "abcdef0123456789abcdef0123456789";
+    const model = buildApiModel(
+      [
+        ...withBody("/api/cart", JSON.stringify({ csrf_token: token }), "POST"),
+        ...withBody(`/api/checkout?csrf=${token}`, "{}"),
+      ],
+      { firstPartyOrigins: [ORIGIN] },
+    );
+
+    // Precondition: both endpoints reached the model. Without this the
+    // assertion below is satisfied by an empty model.
+    expect(model.apis.length).toBe(2);
+    for (const api of model.apis) expect(api.depends_on, api.url).toEqual([]);
+  });
+
+  it("still follows an ordinary identifier in the same shape", () => {
+    // The counterweight: the rule above must exclude tokens, not everything
+    // that travels in a query string.
+    const id = "8f14e45fceea167a5a36dedd4bea2543";
+    const model = buildApiModel(
+      [
+        ...withBody("/api/cart", JSON.stringify({ order_ref: id }), "POST"),
+        ...withBody(`/api/checkout?order=${id}`, "{}"),
+      ],
+      { firstPartyOrigins: [ORIGIN] },
+    );
+    const edges = model.apis.flatMap((api) => api.depends_on);
+    expect(edges).toHaveLength(1);
+  });
+
+  it("does not let a value flow backwards", () => {
+    // A shared constant would otherwise make two unrelated endpoints
+    // mutually dependent.
+    const shared = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const model = buildApiModel(
+      [
+        ...withBody(`/api/first/${shared}`, JSON.stringify({ ref: shared })),
+        ...withBody(`/api/second/${shared}`, JSON.stringify({ ref: shared })),
+      ],
+      { firstPartyOrigins: [ORIGIN] },
+    );
+    const edges = model.apis.flatMap((api) => api.depends_on);
+    // At most one direction, never both.
+    expect(edges.length).toBeLessThanOrEqual(1);
+  });
+
+  it("ignores values too short to be identifiers", () => {
+    const model = buildApiModel(
+      [...withBody("/api/status", '{"code":"ok"}'), ...withBody("/api/ok", "{}")],
+      { firstPartyOrigins: [ORIGIN] },
+    );
+    for (const api of model.apis) expect(api.depends_on).toEqual([]);
+  });
+});

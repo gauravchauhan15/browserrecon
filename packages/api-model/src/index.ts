@@ -30,6 +30,9 @@ export type {
   RelationshipKind,
 } from "./relationships.js";
 
+export { dependenciesFor, extractIdentifiers, valuesIn } from "./flow.js";
+export type { FlowSource, FlowedValue } from "./flow.js";
+
 export { buildSequences, meaningfulSequences } from "./sequence.js";
 export type {
   ApiSequence,

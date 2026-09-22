@@ -7,11 +7,32 @@
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts"],
   "references": [
-    { "path": "../../apps/cli" },
-    { "path": "../../packages/browser/manager" },
-    { "path": "../../packages/event-store" },
-    { "path": "../../packages/events" },
-    { "path": "../../packages/fixtures" },
-    { "path": "../../packages/orchestrator" }
+    {
+      "path": "../../apps/cli"
+    },
+    {
+      "path": "../../packages/api-model"
+    },
+    {
+      "path": "../../packages/auth"
+    },
+    {
+      "path": "../../packages/browser/manager"
+    },
+    {
+      "path": "../../packages/collectors/javascript-discovery"
+    },
+    {
+      "path": "../../packages/event-store"
+    },
+    {
+      "path": "../../packages/events"
+    },
+    {
+      "path": "../../packages/fixtures"
+    },
+    {
+      "path": "../../packages/orchestrator"
+    }
   ]
 }

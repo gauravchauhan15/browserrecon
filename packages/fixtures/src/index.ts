@@ -36,6 +36,7 @@ export { dynamicSite } from "./apps/dynamic-site.js";
 export { BEACON_PATHS, FIRST_PARTY_API, VENDOR_SCRIPTS, noisySite } from "./apps/noisy-site.js";
 export type { NoisySiteOptions } from "./apps/noisy-site.js";
 export { WEBMCP_TOOLS, webmcpSite } from "./apps/webmcp-site.js";
+export { ORDER_ID, PARALLEL_PATHS, parallelSite } from "./apps/parallel-site.js";
 
 export { OPCODES, decodeFrame, encodeFrame, handshakeAccept } from "./websocket.js";
 export type { FixtureSocket, WebSocketRoute } from "./websocket.js";
@@ -44,6 +45,7 @@ import { dynamicSite } from "./apps/dynamic-site.js";
 import { formsSite } from "./apps/forms-site.js";
 import { framedSite } from "./apps/framed-site.js";
 import { noisySite } from "./apps/noisy-site.js";
+import { parallelSite } from "./apps/parallel-site.js";
 import { realtimeSite } from "./apps/realtime-site.js";
 import { spaSite } from "./apps/spa-site.js";
 import { restApi } from "./apps/rest-api.js";
@@ -72,4 +74,5 @@ export const ALL_FIXTURE_APPS: readonly (() => FixtureApp)[] = [
   dynamicSite,
   noisySite,
   webmcpSite,
+  parallelSite,
 ];
