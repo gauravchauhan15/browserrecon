@@ -9,6 +9,9 @@
       "path": "./packages/api-model"
     },
     {
+      "path": "./packages/auth"
+    },
+    {
       "path": "./packages/authorization"
     },
     {

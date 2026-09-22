@@ -83,6 +83,15 @@ export type {
 export { CHUNK_SOURCES, discoverChunks, unfetchedChunks } from "./chunks.js";
 export type { ChunkSource, DiscoveredChunk } from "./chunks.js";
 
+export {
+  decodeInlineSourceMap,
+  isInlineSourceMap,
+  originalPositionFor,
+  parseSourceMap,
+  sourceMappingUrl,
+} from "./source-map.js";
+export type { Mapping, OriginalPosition, SourceMap } from "./source-map.js";
+
 export { RECONCILED_STATUSES, reconcile } from "./reconcile.js";
 export type {
   ReconcileOptions,

@@ -46,6 +46,14 @@ import {
 export interface ApiObservation {
   /** Envelope sequence of the request event — the ordering authority (§13.2). */
   readonly sequence: number;
+  /**
+   * Envelope sequence of the response.
+   *
+   * With the request sequence this gives the interval the request was in
+   * flight, which is what makes "these two were concurrent" an exact
+   * statement rather than a guess at a window.
+   */
+  readonly responseSequence: number;
   readonly eventId: string;
   readonly url: string;
   readonly status?: number | undefined;
@@ -277,6 +285,7 @@ export function buildApiModel(
 
     bucket.observations.push({
       sequence: request.envelope.sequence,
+      responseSequence: envelope.sequence,
       eventId: request.envelope.event_id,
       url: request.url.raw,
       status: payload.status,

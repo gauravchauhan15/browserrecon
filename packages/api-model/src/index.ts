@@ -30,5 +30,13 @@ export type {
   RelationshipKind,
 } from "./relationships.js";
 
+export { buildSequences, meaningfulSequences } from "./sequence.js";
+export type {
+  ApiSequence,
+  BuildSequencesOptions,
+  SequenceModel,
+  SequencePosition,
+} from "./sequence.js";
+
 export { buildApiModel } from "./model.js";
 export type { ApiModel, ApiObject, ApiObservation, BuildApiModelOptions } from "./model.js";
