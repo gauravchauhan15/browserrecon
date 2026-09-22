@@ -204,7 +204,7 @@ describe("context travels with each observation", () => {
 
   it("attributes a request to the interaction that preceded it", () => {
     const model = build([
-      event("interaction", { interaction_id: "int_0001", kind: "click" }),
+      event("interaction", { interactionId: "int_0001", kind: "click" }),
       ...call(`${ORIGIN}/api/cart`, { method: "POST", status: 201 }),
     ]);
     expect(model.apis[0]?.observations[0]?.interactionId).toBe("int_0001");
@@ -215,7 +215,7 @@ describe("context travels with each observation", () => {
     // page that is gone. Left unbounded, one click would be credited with
     // every request for the rest of the scan.
     const model = build([
-      event("interaction", { interaction_id: "int_0001", kind: "click" }),
+      event("interaction", { interactionId: "int_0001", kind: "click" }),
       event("navigation_committed", { url: `${ORIGIN}/next` }),
       ...call(`${ORIGIN}/api/after`),
     ]);
@@ -274,7 +274,7 @@ describe("causality", () => {
     // An edge to an id nothing resolves is worse than no edge: it reads as
     // evidence and leads nowhere.
     const events = [
-      event("interaction", { interaction_id: "int_0001", kind: "click" }),
+      event("interaction", { interactionId: "int_0001", kind: "click" }),
       ...call(`${ORIGIN}/api/cart`, {
         initiator: { type: "script", stack: [`f@${ORIGIN}/checkout.js:1:1`] },
       }),
@@ -295,7 +295,7 @@ describe("causality", () => {
 
   it("states a basis for every edge it does produce", () => {
     const model = build([
-      event("interaction", { interaction_id: "int_0001", kind: "click" }),
+      event("interaction", { interactionId: "int_0001", kind: "click" }),
       ...call(`${ORIGIN}/api/cart`),
     ]);
     for (const edge of model.apis[0]?.caused_by ?? []) {

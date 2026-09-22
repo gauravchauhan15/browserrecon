@@ -55,7 +55,26 @@ const steps = [
     required: true,
   },
   {
-    name: "secret scan",
+    // The working tree, before it becomes history.
+    //
+    // `detect` below scans commits, which means a credential-shaped fixture
+    // in an uncommitted change is invisible to it — it is only caught on the
+    // *next* verify run, after the commit exists and has probably been
+    // pushed. That happened twice before this step was added, both times
+    // needing an allowlist entry for a value that should never have landed.
+    //
+    // First, because a leak in what you are about to commit is the one you
+    // can still do something cheap about.
+    name: "secret scan (working tree)",
+    cmd: "gitleaks",
+    args: ["detect", "--no-git", "--no-banner", "--redact"],
+    required: false,
+    missingHint:
+      "gitleaks not installed — the working tree is UNSCANNED locally.\n" +
+      "        Install: brew install gitleaks   (CI enforces this regardless)",
+  },
+  {
+    name: "secret scan (history)",
     cmd: "gitleaks",
     args: ["detect", "--no-banner", "--redact", "--log-opts=--all"],
     required: false,

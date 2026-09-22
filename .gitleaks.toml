@@ -62,4 +62,10 @@ regexes = [
   # and more dangerous act than naming them.
   '''sk_live_4eC39HqLyjWDarjtT1zdp7dc''',
   '''ghp_016c75a9d2ee4b8e9f0a1b2c3d4e5f6a7b8c''',
+  # Hex filler committed in 3c53461 as a fake CSRF token: `abcdef` and
+  # `0123456789` repeated. The working-tree scan added to `verify` alongside
+  # this entry is what stops the next one reaching history at all — until
+  # then `verify` only scanned commits, so anything about to be committed was
+  # invisible to it and was caught one run too late.
+  '''abcdef0123456789abcdef0123456789''',
 ]

@@ -296,7 +296,25 @@ export async function scan(input: ScanCommandInput): Promise<void> {
       bucket,
       queue,
       discovery,
-      browsing: runner,
+      browsing: {
+        launch: () => runner.launch(),
+        close: () => runner.close(),
+        visit: async (context) => {
+          const result = await runner.visit(context);
+          // §10C.7: a control the scan chose not to press is a coverage gap
+          // with a cause, not an absence. Without this the report says a
+          // page had no surface when what happened is that the tool declined
+          // to touch it — which is a different, better answer.
+          for (const control of result.controls) {
+            if (control.pressed || control.reason === undefined) continue;
+            excluded.push({
+              url: `${context.candidate.url}#${control.label}`,
+              reason: control.reason,
+            });
+          }
+          return result;
+        },
+      },
       collection: {
         get eventsWritten() {
           return store.stats.appended;

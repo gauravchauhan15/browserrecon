@@ -27,8 +27,10 @@
 import {
   createBrowserAdapter,
   type BrowserAdapter,
+  type HarvestedControl,
   type PageHarvest,
 } from "@browserrecon/browser-adapter";
+import { buildElementReference, recordInteractions } from "@browserrecon/collector-interaction";
 import {
   launchBrowser,
   type BrowserSession,
@@ -40,6 +42,7 @@ import type { EventBus } from "@browserrecon/events";
 import { PolicyEngine } from "@browserrecon/policy";
 import type { TargetPolicy } from "@browserrecon/policy";
 import type { TokenBucket } from "@browserrecon/rate-controller";
+import { decideControl, type ControlOutcome } from "./interact.js";
 import { attachTelemetry, type Telemetry } from "@browserrecon/telemetry-cdp";
 
 /** Raised when the browser itself has died, as opposed to one page failing. */
@@ -61,9 +64,22 @@ export interface RunnerOptions {
   /** How long to wait for telemetry to publish everything it saw. */
   readonly drainMs?: number | undefined;
   readonly navigationTimeoutMs?: number | undefined;
+  /**
+   * Controls pressed per page.
+   *
+   * Bounded because a page of forty buttons would otherwise consume the
+   * whole scan on one screen. Small by default: the first few controls on a
+   * page are overwhelmingly the ones that do something, and §9.4's budget
+   * arithmetic has to survive the multiplication.
+   */
+  readonly maxInteractionsPerPage?: number | undefined;
+  /** Off leaves the scan navigation-only, as it was before BR-M3-pre. */
+  readonly interact?: boolean | undefined;
 }
 
 export interface VisitOutcome {
+  /** Controls pressed and refused on this page, with the reason for each. */
+  readonly controls: readonly ControlOutcome[];
   /**
    * Whether the page was loaded. Reported rather than inferred — see the
    * note on the orchestrator's `VisitResult`.
@@ -78,6 +94,9 @@ export interface VisitOutcome {
 
 const DEFAULT_SETTLE_MS = 2_000;
 const DEFAULT_DRAIN_MS = 400;
+const DEFAULT_MAX_INTERACTIONS = 6;
+/** A click's own settle budget. Shorter than a navigation's: most do little. */
+const INTERACTION_SETTLE_MS = 1_000;
 
 export interface Runner {
   launch(): Promise<void>;
@@ -101,6 +120,14 @@ export function createRunner(options: RunnerOptions): Runner {
 
   let session: BrowserSession | undefined;
   let adapter: BrowserAdapter | undefined;
+  /**
+   * The adapter every action goes through when interacting.
+   *
+   * Wraps the plain adapter so each click becomes an `interaction` event on
+   * the bus — which is what gives a request an `interaction_id` and makes a
+   * workflow something M3 can detect rather than infer.
+   */
+  let recording: BrowserAdapter | undefined;
   let telemetry: Telemetry | undefined;
 
   const teardown = async (): Promise<void> => {
@@ -112,6 +139,96 @@ export function createRunner(options: RunnerOptions): Runner {
     telemetry = undefined;
     adapter = undefined;
     session = undefined;
+  };
+
+  /**
+   * Press what the page offers, within budget and policy.
+   *
+   * Re-harvests after each click rather than reusing the first read: a click
+   * that opened a menu has changed the page, and pressing a selector read
+   * before it would either miss or hit something else. The cost is one
+   * evaluate per interaction, which is cheap next to the settle.
+   */
+  const pressControls = async (
+    page: PageHarvest,
+    pageUrl: string,
+  ): Promise<ControlOutcome[]> => {
+    const outcomes: ControlOutcome[] = [];
+    if (options.interact === false) return outcomes;
+
+    const driver = recording;
+    if (driver === undefined) return outcomes;
+
+    const budget = options.maxInteractionsPerPage ?? DEFAULT_MAX_INTERACTIONS;
+    const pressed = new Set<string>();
+    let current: readonly HarvestedControl[] = page.controls;
+    let url = pageUrl;
+
+    for (let attempt = 0; attempt < budget * 2 && pressed.size < budget; attempt += 1) {
+      // Document order, always. Two scans of the same page press the same
+      // buttons in the same order, or §36.2's comparison is worthless and
+      // M3's workflow detection has nothing stable to detect.
+      const next = current.find((control) => {
+        const built = buildElementReference(control.facts);
+        return !pressed.has(built.selector);
+      });
+      if (next === undefined) break;
+
+      const verdict = decideControl(next, url, {
+        policy: {
+          allowedMethods: [...engine.policy.allowedMethods],
+          stateChangingActions: engine.policy.agent.stateChangingActions,
+        },
+        pressed,
+        remaining: budget - pressed.size,
+        reference: (control) => {
+          const built = buildElementReference(control.facts);
+          return { selector: built.selector, label: built.label };
+        },
+      });
+
+      if (!verdict.press) {
+        outcomes.push({
+          label: next.facts.accessibleName,
+          pressed: false,
+          reason: verdict.reason,
+          detail: verdict.detail,
+        });
+        // Mark it seen so the loop moves on rather than re-deciding it.
+        pressed.add(buildElementReference(next.facts).selector);
+        continue;
+      }
+
+      const result = await driver.click(verdict.selector);
+      pressed.add(verdict.selector);
+      outcomes.push({
+        selector: verdict.selector,
+        label: verdict.label,
+        pressed: result.status === "ok",
+        ...(result.status === "ok"
+          ? {}
+          : { detail: result.status === "denied" ? result.reason : result.detail }),
+      });
+
+      if (result.status === "failed" && result.kind === "browser_closed") {
+        throw new RunnerBrowserCrash(result.detail);
+      }
+
+      // Let whatever the click started finish before reading the page again.
+      await driver.waitForSettled({ timeoutMs: INTERACTION_SETTLE_MS });
+
+      const reharvested = await driver.harvest();
+      if (reharvested.status !== "ok") break;
+      current = reharvested.value.controls;
+      url = reharvested.value.url;
+
+      // A click that navigated has left the page this loop was exploring.
+      // Continuing would press controls on a different screen and record
+      // them against this one.
+      if (url !== pageUrl && new URL(url).pathname !== new URL(pageUrl).pathname) break;
+    }
+
+    return outcomes;
   };
 
   return {
@@ -142,13 +259,19 @@ export function createRunner(options: RunnerOptions): Runner {
         logger: log,
       });
 
-      adapter = await createBrowserAdapter({
+      const created = await createBrowserAdapter({
         session,
         engine,
         logger: log,
         ...(options.navigationTimeoutMs === undefined
           ? {}
           : { defaultTimeoutMs: options.navigationTimeoutMs }),
+      });
+      adapter = created;
+      recording = recordInteractions({
+        adapter: created,
+        bus: options.bus,
+        authContext: "anonymous",
       });
     },
 
@@ -165,6 +288,7 @@ export function createRunner(options: RunnerOptions): Runner {
         return {
           outcome: "failed",
           detail: "cancelled",
+          controls: [],
           discovered: [],
           requests: 0,
           forms: [],
@@ -184,6 +308,7 @@ export function createRunner(options: RunnerOptions): Runner {
         return {
           outcome: "denied",
           detail: navigation.reason,
+          controls: [],
           discovered: [],
           requests: 0,
           forms: [],
@@ -197,6 +322,7 @@ export function createRunner(options: RunnerOptions): Runner {
         return {
           outcome: "failed",
           detail: `${navigation.kind}: ${navigation.detail}`,
+          controls: [],
           discovered: [],
           requests: 0,
           forms: [],
@@ -223,7 +349,14 @@ export function createRunner(options: RunnerOptions): Runner {
             : `${harvested.kind}: ${harvested.detail}`;
         log.warn("could not read the page's links", { url: candidate.url, why });
         await currentTelemetry.drain(options.drainMs ?? DEFAULT_DRAIN_MS);
-        return { outcome: "visited", detail: why, discovered: [], requests: 1, forms: [] };
+        return {
+          outcome: "visited",
+          detail: why,
+          controls: [],
+          discovered: [],
+          requests: 1,
+          forms: [],
+        };
       }
 
       // Drain *after* harvesting, so requests the page made while settling
@@ -234,6 +367,10 @@ export function createRunner(options: RunnerOptions): Runner {
       for (const form of page.forms) {
         forms.push({ page: page.url, form });
       }
+
+      // Interact before collecting links: a click can add links to the page,
+      // and harvesting again afterwards is how a code-split route is found.
+      const controls = await pressControls(page, candidate.url);
 
       const discovered: Candidate[] = [];
       for (const link of page.links) {
@@ -248,6 +385,7 @@ export function createRunner(options: RunnerOptions): Runner {
 
       return {
         outcome: "visited",
+        controls,
         discovered,
         requests: 1,
         forms: page.forms,

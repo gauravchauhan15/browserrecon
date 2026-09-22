@@ -15,6 +15,7 @@ import {
   ORDER_ID,
   PARALLEL_PATHS,
   dynamicSite,
+  formsSite,
   noisySite,
   parallelSite,
   startFixture,
@@ -152,26 +153,77 @@ describe("V2: runtime APIs are tied to interactions and navigation", () => {
   );
 
   gateTest(
-    "attributes nothing to an interaction, because the runner does not click yet",
+    "attributes requests to the interaction that caused them",
     async () => {
-      // Recorded as a test rather than left as an absence. §14's
-      // `interaction_id` context is implemented and unit-tested against a
-      // literal log, but nothing exercises it end to end: the deterministic
-      // explorer's interaction phase is not wired into the runner, so no
-      // scan has ever produced one.
-      //
-      // This fails the day that changes, which is the point — the gate
-      // should notice when a limitation stops being true.
+      // This test used to assert the opposite. The runner navigated and
+      // harvested but never clicked, so `interaction_id` was a field nothing
+      // ever filled — §14's context was implemented, unit-tested against a
+      // literal log, and unreachable in practice. The gate carried an
+      // explicit test asserting the limitation was *still* true, which
+      // failed the day the interaction phase landed. That is what it was for.
       const fixture = await startFixture(dynamicSite());
       try {
         const { model } = await scanAndModel(fixture, ["--max-pages", "6"]);
         const attributed = model.apis.flatMap((api) =>
           api.observations.filter((o) => o.interactionId !== undefined),
         );
+
         expect(
           attributed.length,
-          "an interaction was attributed — the runner now clicks, so update the gate doc",
-        ).toBe(0);
+          "no request was attributed to an interaction",
+        ).toBeGreaterThan(0);
+        for (const observation of attributed) {
+          expect(observation.interactionId).toMatch(/^int_\d{4}$/);
+        }
+      } finally {
+        await fixture.close();
+      }
+    },
+    120_000,
+  );
+
+  gateTest(
+    "reaches endpoints that only exist behind a click",
+    async () => {
+      // The reason the phase exists. `dynamic-site` keeps two endpoints in a
+      // chunk fetched on click; before this a scan saw the shell and
+      // concluded the application was small.
+      const fixture = await startFixture(dynamicSite());
+      try {
+        await scanAndModel(fixture, ["--max-pages", "6"]);
+        const reached = new Set(fixture.requests.map((request) => request.pathname));
+
+        expect(reached.has("/chunk-orders.js"), "the code-split chunk was never loaded").toBe(
+          true,
+        );
+        for (const endpoint of ["/api/orders/pending", "/api/orders/archive"]) {
+          expect(reached.has(endpoint), `${endpoint} was never reached`).toBe(true);
+        }
+      } finally {
+        await fixture.close();
+      }
+    },
+    120_000,
+  );
+
+  gateTest(
+    "still issues no state-changing request, now that it clicks",
+    async () => {
+      // The property clicking most endangers. `forms-site` carries a delete
+      // form and a money transfer labelled "Continue"; this reads the
+      // server's own record rather than the scan's account of itself.
+      const fixture = await startFixture(formsSite());
+      try {
+        const { code } = await scanAndModel(fixture, ["--max-pages", "10"]);
+        expect(code).toBe(0);
+
+        const written = fixture.requests.filter(
+          (request) => !["GET", "HEAD", "OPTIONS"].includes(request.method),
+        );
+        expect(
+          written.map((request) => `${request.method} ${request.pathname}`),
+          "clicking caused a state-changing request",
+        ).toEqual([]);
       } finally {
         await fixture.close();
       }
@@ -381,21 +433,42 @@ describe("V2: golden outputs are stable", () => {
           // The findings, not the measurements: event ids encode arrival
           // order, and M1 measured that Chrome's startup interleaving is not
           // stable. What must be stable is what the model concluded.
+          // Sorted before comparing. `model.apis` is in first-appearance
+          // order, and for four requests fired in one `Promise.all` the
+          // order responses come back in is the browser's business — this
+          // test was observed failing on it. What the product actually
+          // guarantees is a sorted export (`toExportedApis`), which the M1
+          // gate already compares byte for byte; asserting arrival order
+          // here would be a stricter claim than anything downstream makes.
+          //
+          // What must be stable is the *set* and its contents.
           shapes.push(
             JSON.stringify(
-              model.apis.map((api) => ({
-                method: api.method,
-                url: api.url.replace(fixture.origin, ""),
-                role: api.role,
-                statuses: api.statuses,
-                parameters: api.parameters,
-                depends_on: api.depends_on.map((e) => e.kind),
-              })),
+              model.apis
+                .map((api) => ({
+                  method: api.method,
+                  url: api.url.replace(fixture.origin, ""),
+                  role: api.role,
+                  statuses: api.statuses,
+                  parameters: api.parameters,
+                  depends_on: api.depends_on.map((e) => e.kind),
+                }))
+                .sort((a, b) => `${a.method} ${a.url}`.localeCompare(`${b.method} ${b.url}`)),
             ),
           );
         }
-        expect(shapes[1]).toBe(shapes[0]);
-        expect(shapes[2]).toBe(shapes[0]);
+        const diff = (a: string, b: string): string => {
+          const left = JSON.parse(a) as unknown[];
+          const right = JSON.parse(b) as unknown[];
+          for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+            const l = JSON.stringify(left[index]);
+            const r = JSON.stringify(right[index]);
+            if (l !== r) return `index ${index}:\n  A: ${l}\n  B: ${r}`;
+          }
+          return "";
+        };
+        expect(diff(shapes[0] ?? "[]", shapes[1] ?? "[]"), "run 2").toBe("");
+        expect(diff(shapes[0] ?? "[]", shapes[2] ?? "[]"), "run 3").toBe("");
       } finally {
         await fixture.close();
       }

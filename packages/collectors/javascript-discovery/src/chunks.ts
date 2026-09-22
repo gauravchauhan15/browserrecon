@@ -106,8 +106,13 @@ export function discoverChunks(events: readonly EventEnvelope[]): readonly Disco
         break;
 
       case "interaction": {
-        const payload = envelope.payload as { interaction_id?: string };
-        lastInteraction = payload.interaction_id ?? envelope.event_id;
+        // `interactionId`, the key the interaction collector emits. This
+        // read `interaction_id` with a fallback to the event id, which meant
+        // it never produced a real interaction id while looking as though it
+        // had — the same bug the M2 gate found in the API model. No fallback:
+        // a plausible wrong value is worse than an absent one.
+        const payload = envelope.payload as { interactionId?: string };
+        lastInteraction = payload.interactionId;
         break;
       }
 

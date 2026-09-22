@@ -49,6 +49,20 @@ say the two are related; we noticed a value moved.
 The output records **which field flowed, never what was in it**. A gate test
 asserts the fixture's order id never appears in any basis string.
 
+## What "stable" means here, precisely
+
+The gate compares the model's contents after sorting, not its array order.
+`model.apis` is in first-appearance order, and for four requests fired in one
+`Promise.all` the order the responses come back in is the browser's business —
+this test was observed failing on exactly that, under load, after ten other
+scans in the same process.
+
+Arrival order is not something the product promises. What it promises is a
+deterministically sorted export, which `toExportedApis` produces and the M1
+gate already compares byte for byte. Asserting arrival order here would have
+been a stricter claim than anything downstream makes, and the failure it
+produced said nothing about the tool.
+
 ## Not proven, and worth stating
 
 - **No interaction has ever been attributed end to end.** §14's
@@ -78,10 +92,25 @@ asserts the fixture's order id never appears in any basis string.
 
 **The initiator test picked a fixture that cannot produce initiators.** It
 used `dynamic-site` and failed: no request was attributed to a script. The
-code was right — that fixture's calls need a click, and the runner does not
-click. The test moved to a fixture that genuinely produces script initiators
-with stacks, and the click gap above became a recorded limitation with a test
-watching it, rather than an assumption nobody had checked.
+code was right — that fixture's calls need a click, and at the time the
+runner did not click. The test moved to a fixture that genuinely produces
+script initiators with stacks, and the click gap became a recorded limitation
+with a gate test asserting it was _still_ true.
+
+That test then failed, on purpose, the day the interaction phase landed —
+which is what it was for. It is now the positive assertion it always
+anticipated.
+
+**`interactionId` had never once been read correctly.** The API model looked
+for `interaction_id` and fell back to the envelope's event id when it was
+absent — which it always was, because the interaction collector emits
+`interactionId`. The field looked populated on every observation, so nothing
+noticed, and every unit test passed because they built events with the
+invented key. The gate caught it the first time a real scan produced an
+interaction, and the same bug was then found in `chunks.ts`.
+
+The fallback is gone from both. A plausible wrong value is worse than an
+absent one, because only one of them gets investigated.
 
 **A `depends_on` test passed for the wrong reason.** It asserted that a
 session token is never followed as a dependency, using `/api/login` as the

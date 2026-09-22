@@ -85,13 +85,40 @@ export interface NavigationOutcome {
   readonly redirected: boolean;
 }
 
-/** Links and forms as they exist in the page right now. */
+/** Links, forms and interactive controls as they exist in the page right now. */
 export interface PageHarvest {
   /** Absolute URLs, deduplicated, in document order. */
   readonly links: readonly string[];
   readonly forms: readonly HarvestedForm[];
+  /**
+   * Controls worth interacting with, in document order.
+   *
+   * Buttons and clickable non-anchor elements. Plain links are in `links`
+   * and are reached by navigating, which is cheaper and does not need a
+   * click — a control is here because following it means *doing* something.
+   *
+   * Carried as facts rather than selectors: turning facts into a selector is
+   * a pure function (`buildElementReference`), and keeping it out of the
+   * browser layer is what makes "reproducible across runs" testable without
+   * a browser.
+   */
+  readonly controls: readonly HarvestedControl[];
   /** The URL these were read from, which may differ from the one requested. */
   readonly url: string;
+}
+
+/** An interactive control, with the facts a reference is derived from. */
+export interface HarvestedControl {
+  /** Document order, so the same page yields the same order every run. */
+  readonly index: number;
+  readonly facts: ElementFacts;
+  /**
+   * The form it submits, when it is a submit control.
+   *
+   * Present means clicking it submits that form, so the form's own
+   * classification decides whether the click is allowed at all.
+   */
+  readonly submitsForm?: HarvestedForm | undefined;
 }
 
 export interface HarvestedForm {

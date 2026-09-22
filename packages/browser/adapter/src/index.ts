@@ -17,7 +17,7 @@
 export const PACKAGE_NAME = "@browserrecon/browser-adapter" as const;
 
 export { ADAPTER_ACTIONS, FAILURE_KINDS, denied, failed, ok } from "./types.js";
-export type { HarvestedForm, PageHarvest } from "./types.js";
+export type { HarvestedControl, HarvestedForm, PageHarvest } from "./types.js";
 export type {
   ActionOptions,
   ActionResult,

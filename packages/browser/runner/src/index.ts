@@ -11,5 +11,8 @@ export const PACKAGE_NAME = "@browserrecon/browser-runner" as const;
 export { RunnerBrowserCrash, createRunner } from "./runner.js";
 export type { Runner, RunnerOptions, VisitOutcome } from "./runner.js";
 
+export { SKIP_REASONS, decideControl } from "./interact.js";
+export type { ControlOutcome, ControlVerdict, DecideOptions, SkipReason } from "./interact.js";
+
 export { createBrowserNativeDiscovery } from "./discovery.js";
 export type { BrowserNativeDiscoveryOptions } from "./discovery.js";

@@ -20,6 +20,9 @@
       "path": "../../../packages/browser/telemetry-cdp"
     },
     {
+      "path": "../../../packages/collectors/interaction"
+    },
+    {
       "path": "../../../packages/collectors/network"
     },
     {

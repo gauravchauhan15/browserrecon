@@ -20,6 +20,7 @@
   "dependencies": {
     "@browserrecon/browser-adapter": "workspace:*",
     "@browserrecon/browser-manager": "workspace:*",
+    "@browserrecon/collector-interaction": "workspace:*",
     "@browserrecon/collector-network": "workspace:*",
     "@browserrecon/core": "workspace:*",
     "@browserrecon/deterministic-explorer": "workspace:*",

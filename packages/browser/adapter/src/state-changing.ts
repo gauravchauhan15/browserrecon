@@ -135,14 +135,29 @@ export function inferStateChanging(facts: ElementFacts): StateChangeVerdict {
     return { stateChanging: true, because: "submits a form with a non-GET method" };
   }
 
-  if (facts.tagName === "button" && (facts.type ?? "submit") === "submit" && facts.inForm) {
-    // A <button> inside a form defaults to type=submit, which is the single
-    // most common way a click becomes a write.
-    return { stateChanging: true, because: "is a submit button inside a form" };
-  }
+  const isSubmitControl =
+    (facts.tagName === "button" && (facts.type ?? "submit") === "submit" && facts.inForm) ||
+    (facts.tagName === "input" && (facts.type === "submit" || facts.type === "image"));
 
-  if (facts.tagName === "input" && (facts.type === "submit" || facts.type === "image")) {
-    return { stateChanging: true, because: "is a form submit control" };
+  if (isSubmitControl) {
+    // A submit control in a form whose method is GET is a read. HTTP says so,
+    // and §5A.2's `classifyForm` says so in as many words: "a GET form is a
+    // read by HTTP's own definition. A server that writes on GET is broken."
+    //
+    // This used to return `stateChanging` for every submit control, which
+    // made the two halves of the codebase disagree — the explorer classified
+    // a search form `safe_read` and decided to submit it, and then the
+    // adapter refused the click. The cost was silent: search and filter
+    // forms, which are how a scan reaches a lot of surface, were never
+    // submitted and nothing recorded why.
+    //
+    // The residual risk is a server that writes on a GET form. That server is
+    // broken, the destructive-word check below still refuses anything that
+    // *looks* like a write, and §5A.2 already accepts this exact risk. What
+    // is not acceptable is two components disagreeing about it.
+    if (facts.nonGetMethod || !facts.inForm) {
+      return { stateChanging: true, because: "is a form submit control" };
+    }
   }
 
   const word = DESTRUCTIVE_WORDS.find((candidate) => facts.accessibleName.includes(candidate));

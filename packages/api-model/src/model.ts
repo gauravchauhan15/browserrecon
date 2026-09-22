@@ -222,8 +222,19 @@ export function buildApiModel(
     }
 
     if (envelope.type === "interaction") {
-      const payload = envelope.payload as { interaction_id?: string };
-      interactionId = payload.interaction_id ?? envelope.event_id;
+      // `interactionId`, the key the interaction collector actually emits.
+      //
+      // This read `interaction_id` and fell back to the envelope's event id,
+      // which meant it never once produced a real interaction id — and the
+      // field looked populated, so nothing noticed. Every unit test passed
+      // because they built events with the invented key. The M2 gate caught
+      // it the first time a real scan produced an interaction.
+      //
+      // No fallback now. An interaction event carries an interaction id or
+      // it carries nothing; a plausible wrong value is worse than an absent
+      // one, because only one of them gets investigated.
+      const payload = envelope.payload as { interactionId?: string };
+      interactionId = payload.interactionId;
       continue;
     }
 

@@ -151,7 +151,7 @@ describe("dynamic chunk discovery (§10B.6)", () => {
         initiator: { type: "parser" },
       }),
       event("page_loaded", { url: "https://shop.example.com/" }),
-      event("interaction", { interaction_id: "int_0001" }),
+      event("interaction", { interactionId: "int_0001" }),
       event("network_request", {
         url: "https://shop.example.com/admin.chunk.js",
         resourceType: "Script",

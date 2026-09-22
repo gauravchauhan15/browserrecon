@@ -31,6 +31,7 @@ import type { Page } from "puppeteer-core";
 import type { BrowserSession } from "@browserrecon/browser-manager";
 import { silentLogger, type Logger } from "@browserrecon/core";
 import type { Decision, PolicyEngine } from "@browserrecon/policy";
+import type { AncestorStep } from "./state-changing.js";
 import {
   inferStateChanging,
   resolveStateChanging,
@@ -45,6 +46,7 @@ import {
   type AdapterAction,
   type BrowserAdapter,
   type FailureKind,
+  type HarvestedControl,
   type HarvestedForm,
   type NavigationOutcome,
   type PageHarvest,
@@ -104,7 +106,7 @@ export function policyActionFor(action: AdapterAction): string {
   return POLICY_ACTION[action] ?? action;
 }
 
-function readHarvest(): { links: string[]; forms: HarvestedForm[] } {
+function readHarvest(): Omit<PageHarvest, "url"> {
   const links: string[] = [];
   const seen = new Set<string>();
   for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
@@ -114,25 +116,128 @@ function readHarvest(): { links: string[]; forms: HarvestedForm[] } {
     links.push(href);
   }
 
-  const forms = Array.from(document.querySelectorAll("form")).map((form) => {
-    const element = form as HTMLFormElement;
+  const describeForm = (element: HTMLFormElement): HarvestedForm => {
     const submit = element.querySelector(
       "button[type=submit], button:not([type]), input[type=submit]",
     );
+    const submitText =
+      submit?.textContent?.trim() ?? (submit as HTMLInputElement | null)?.value ?? "";
     return {
-      id: element.id === "" ? undefined : element.id,
+      ...(element.id === "" ? {} : { id: element.id }),
       method: (element.method === "" ? "get" : element.method).toUpperCase(),
       action: element.action,
       fields: Array.from(element.querySelectorAll("input, select, textarea")).map((field) => ({
         name: (field as HTMLInputElement).name,
-        type: (field as HTMLInputElement).type ?? field.tagName.toLowerCase(),
+        type: String((field as HTMLInputElement).type ?? field.tagName.toLowerCase()),
       })),
-      submitText:
-        submit?.textContent?.trim() ?? (submit as HTMLInputElement | null)?.value ?? undefined,
+      ...(submitText === "" ? {} : { submitText }),
     };
-  });
+  };
 
-  return { links, forms };
+  const forms = Array.from(document.querySelectorAll("form")).map((form) =>
+    describeForm(form as HTMLFormElement),
+  );
+
+  // Controls, not links. A link is followed by navigating; a control is here
+  // because clicking it *does* something, which is the part a workflow is
+  // made of.
+  const CONTROL_SELECTOR = [
+    "button",
+    "input[type=submit]",
+    "input[type=button]",
+    "[role=button]",
+    "[onclick]",
+    "summary",
+    "[role=tab]",
+    "[role=menuitem]",
+  ].join(",");
+
+  const visible = (element: Element): boolean => {
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return false;
+    const style = window.getComputedStyle(element);
+    return style.visibility !== "hidden" && style.display !== "none";
+  };
+
+  const controls: HarvestedControl[] = [];
+  for (const [index, element] of Array.from(
+    document.querySelectorAll(CONTROL_SELECTOR),
+  ).entries()) {
+    if (!visible(element)) continue;
+    if ((element as HTMLButtonElement).disabled === true) continue;
+
+    const owner = element.closest("form") as HTMLFormElement | null;
+    const type = String((element as HTMLButtonElement).type ?? "");
+    // A `<button>` with no type inside a form submits it — the default
+    // nobody remembers, and the difference between a click and a POST.
+    const submits =
+      owner !== null &&
+      (type === "submit" ||
+        (element.tagName.toLowerCase() === "button" && !element.hasAttribute("type")));
+
+    // The element itself first, then its ancestors: a positional selector is
+    // built from the chain, and the chain has to start where the element is.
+    const ancestors: AncestorStep[] = [];
+    let step: Element | null = element;
+    for (let depth = 0; depth < 5 && step !== null; depth += 1) {
+      const tag = step.tagName.toLowerCase();
+      const siblings =
+        step.parentElement === null
+          ? [step]
+          : Array.from(step.parentElement.children).filter(
+              (sibling) => sibling.tagName === (step as Element).tagName,
+            );
+      const stepId = step.id;
+      const stepTestId = step.getAttribute("data-testid");
+
+      ancestors.push({
+        tagName: tag,
+        ...(stepId === "" ? {} : { id: stepId }),
+        classes: Array.from(step.classList).slice(0, 8),
+        nthOfType: siblings.indexOf(step) + 1,
+        uniqueOfType: siblings.length === 1,
+        ...(stepTestId === null ? {} : { testId: stepTestId }),
+      });
+      step = step.parentElement;
+    }
+
+    controls.push({
+      index,
+      facts: {
+        tagName: element.tagName.toLowerCase(),
+        ...(type === "" ? {} : { type }),
+        accessibleName: (
+          element.getAttribute("aria-label") ??
+          element.textContent ??
+          (element as HTMLInputElement).value ??
+          ""
+        )
+          .trim()
+          .slice(0, 200)
+          .toLowerCase(),
+        inForm: owner !== null,
+        ...((element as HTMLAnchorElement).href === undefined
+          ? {}
+          : { href: (element as HTMLAnchorElement).href }),
+        nonGetMethod: owner !== null && (owner.method ?? "get").toLowerCase() !== "get",
+        ...(element.id === "" ? {} : { id: element.id }),
+        classes: Array.from(element.classList).slice(0, 8),
+        ...(element.getAttribute("data-testid") === null
+          ? {}
+          : { testId: element.getAttribute("data-testid") as string }),
+        ...((element as HTMLInputElement).name
+          ? { name: (element as HTMLInputElement).name }
+          : {}),
+        ...(element.getAttribute("role") === null
+          ? {}
+          : { role: element.getAttribute("role") as string }),
+        ancestors,
+      },
+      ...(submits && owner !== null ? { submitsForm: describeForm(owner) } : {}),
+    });
+  }
+
+  return { links, forms, controls };
 }
 
 function withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {

@@ -273,6 +273,9 @@ importers:
       '@browserrecon/browser-manager':
         specifier: workspace:*
         version: link:../manager
+      '@browserrecon/collector-interaction':
+        specifier: workspace:*
+        version: link:../../collectors/interaction
       '@browserrecon/collector-network':
         specifier: workspace:*
         version: link:../../collectors/network
