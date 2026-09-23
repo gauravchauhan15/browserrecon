@@ -29,3 +29,6 @@ export type {
 } from "./surface.js";
 
 export { buildAttackSurfaceSchema } from "./schema.js";
+
+export { assemble } from "./assemble.js";
+export type { AssembleInput, AssembledModel } from "./assemble.js";

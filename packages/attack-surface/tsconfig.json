@@ -1,7 +1,32 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": "src" },
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../../packages/core" }, { "path": "../../packages/events" }]
+  "references": [
+    {
+      "path": "../../packages/api-model"
+    },
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/correlation"
+    },
+    {
+      "path": "../../packages/coverage"
+    },
+    {
+      "path": "../../packages/events"
+    },
+    {
+      "path": "../../packages/state-model"
+    },
+    {
+      "path": "../../packages/workflows"
+    }
+  ]
 }

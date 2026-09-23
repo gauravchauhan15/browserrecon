@@ -99,6 +99,51 @@ const AUTH_PATHS =
 const ASSET_TYPES =
   /^(text\/css|font\/|image\/|video\/|audio\/|text\/javascript|application\/javascript)/i;
 
+/**
+ * Content types that carry an application payload.
+ *
+ * The `application_api` signal has always read "first-party request with an
+ * application payload", and for a long time nothing checked the payload. A
+ * scan of a six-page fixture reported ten APIs, six of which were the HTML
+ * pages themselves and one a 404 favicon — and everything downstream
+ * inherited it: the surface listed documents as endpoints, coverage counted
+ * them as runtime APIs, and workflow detection admitted page loads as steps.
+ */
+const DATA_TYPES =
+  /^(application\/(json|[\w.+-]*\+json|xml|x-ndjson|x-protobuf|grpc|graphql|x-www-form-urlencoded)|text\/(xml|event-stream)|multipart\/form-data)/i;
+
+/**
+ * CDP resource types the browser fetches for itself.
+ *
+ * A `Document` is a page, not an endpoint; `Other` is what a favicon arrives
+ * as. None of them are requests the application code made, which is what an
+ * API call is. Script and stylesheet are here too, so a server that returns
+ * the wrong content type for its own bundle does not add an endpoint.
+ *
+ * A type on this list is only decisive when the response is *not* structured
+ * data: `Other` carrying `application/json` is an API whatever the browser
+ * called the fetch, and an absent resource type changes nothing.
+ */
+const BROWSER_RESOURCE_TYPES = new Set([
+  "document",
+  "stylesheet",
+  "image",
+  "media",
+  "font",
+  "script",
+  "texttrack",
+  "manifest",
+  "prefetch",
+  "other",
+]);
+
+/** A page or a subresource the browser went and got, rather than an API. */
+function isBrowserResource(observation: ObservationForRole): boolean {
+  const type = observation.resourceType?.toLowerCase();
+  if (type === undefined || !BROWSER_RESOURCE_TYPES.has(type)) return false;
+  return !DATA_TYPES.test(observation.mimeType ?? "");
+}
+
 export interface ObservationForRole {
   readonly url: string;
   readonly method: string;
@@ -200,10 +245,16 @@ export function classifyTraffic(observation: ObservationForRole): RoleVerdict {
     }
   }
 
-  if (AUTH_PATHS.test(observation.url)) {
-    // Before the polling check: a token refresh repeats on a timer and would
-    // otherwise be filed as a heartbeat, which would hide the auth flow from
-    // workflow detection that §17A.3 explicitly wants it included in.
+  // Before the polling check: a token refresh repeats on a timer and would
+  // otherwise be filed as a heartbeat, which would hide the auth flow from
+  // workflow detection that §17A.3 explicitly wants it included in.
+  //
+  // Not for a script or an image, though. The pattern matches a substring, so
+  // a vendor's `session-replay.js` was being reported as the application's
+  // own authentication infrastructure — found by the M3 gate, on a fixture
+  // built to be noisy. A login *page* is still auth: `text/html` is not an
+  // asset type, so only the bundles and pixels are excused here.
+  if (AUTH_PATHS.test(observation.url) && !ASSET_TYPES.test(observation.mimeType ?? "")) {
     return { role: "auth_infrastructure", signal: "path matches an authentication endpoint" };
   }
 
@@ -222,6 +273,18 @@ export function classifyTraffic(observation: ObservationForRole): RoleVerdict {
           // A third-party script that is on no list is still third party.
           role: "third_party_widget",
           signal: "third-party asset from a host not on any list",
+        };
+  }
+
+  if (isBrowserResource(observation)) {
+    return firstParty
+      ? {
+          role: "application_asset",
+          signal: `first-party ${observation.resourceType} carrying no application payload`,
+        }
+      : {
+          role: "third_party_widget",
+          signal: "third-party browser resource from a host not on any list",
         };
   }
 

@@ -103,8 +103,35 @@ export interface PageHarvest {
    * a browser.
    */
   readonly controls: readonly HarvestedControl[];
+  /**
+   * WebMCP tools the page has registered — build plan §21.
+   *
+   * Registering a tool is a JavaScript call that sends nothing, so a page's
+   * whole agent-facing action surface is invisible to network telemetry.
+   * Read here because the harvest is the one place that looks at the page
+   * after its scripts have run.
+   */
+  readonly webmcpTools: readonly HarvestedWebMcpTool[];
   /** The URL these were read from, which may differ from the one requested. */
   readonly url: string;
+}
+
+/**
+ * One registered tool, in our shape rather than the draft's.
+ *
+ * §21 keeps the spec behind an adapter because it is young and moving: every
+ * field here is optional except the name, and an unrecognised registry shape
+ * yields nothing rather than failing the harvest.
+ */
+export interface HarvestedWebMcpTool {
+  readonly name: string;
+  readonly description?: string | undefined;
+  /** The declared input schema, as JSON. Opaque on purpose. */
+  readonly inputSchema?: unknown;
+  /** The endpoint the tool says it calls, where it says so. */
+  readonly endpoint?: string | undefined;
+  /** Which registry it came from, so a changing spec is visible in the log. */
+  readonly registry: string;
 }
 
 /** An interactive control, with the facts a reference is derived from. */

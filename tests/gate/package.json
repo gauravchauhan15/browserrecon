@@ -19,13 +19,17 @@
   },
   "dependencies": {
     "@browserrecon/api-model": "workspace:*",
+    "@browserrecon/attack-surface": "workspace:*",
     "@browserrecon/auth": "workspace:*",
     "@browserrecon/browser-manager": "workspace:*",
     "@browserrecon/cli": "workspace:*",
     "@browserrecon/collector-javascript-discovery": "workspace:*",
+    "@browserrecon/correlation": "workspace:*",
+    "@browserrecon/coverage": "workspace:*",
     "@browserrecon/event-store": "workspace:*",
     "@browserrecon/events": "workspace:*",
     "@browserrecon/fixtures": "workspace:*",
-    "@browserrecon/orchestrator": "workspace:*"
+    "@browserrecon/orchestrator": "workspace:*",
+    "@browserrecon/workflows": "workspace:*"
   }
 }

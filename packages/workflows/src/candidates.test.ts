@@ -45,7 +45,7 @@ function api(over: Partial<ApiEvent> = {}): ApiEvent {
     authContext: "anonymous",
     dependsOn: [],
     // The bundle every request comes from, as a real application has. The
-    // frame is left absent by default so the strict merge rule is not
+    // chain is left absent by default so the strict merge rule is not
     // satisfied by accident — matching on the file alone is what merged
     // every segment into one before `shouldMerge` was narrowed.
     initiatorScript: "https://shop.example.com/app.js",
@@ -128,6 +128,47 @@ describe("§18.1 failure mode: one giant SPA workflow", () => {
 
     const model = build(apiEvents, events);
     expect(model.candidates.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("splits one whose requests all go through a shared fetch wrapper", () => {
+    // The M3 gate's finding. `shouldMerge` was narrowed once already, from
+    // the script file to the top frame, because a single-bundle app shares
+    // a file. It shares a top frame too, as soon as it has an `api.get()`
+    // — which is most applications — so the same failure came back one
+    // level down: five screens, five soft navigations, one candidate.
+    reset();
+    const events: EventEnvelope[] = [];
+    const apiEvents: ApiEvent[] = [];
+    for (let screen = 0; screen < 4; screen += 1) {
+      events.push(event("soft_navigation", { to: `/screen-${screen}`, kind: "pushState" }));
+      for (const call of ["list", "detail"]) {
+        apiEvents.push(
+          api({
+            routeTemplate: `/api/screen-${screen}/${call}`,
+            // Same wrapper on top, different caller underneath.
+            initiatorChain: `get@app.js:42:11 < load${screen}${call}@app.js:900:3`,
+          }),
+        );
+      }
+    }
+
+    const model = build(apiEvents, events);
+    expect(model.candidates.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("still merges two segments the same call site really produced", () => {
+    // The counterweight: an identical chain across a navigation is the case
+    // §18.1's merge rule is for, and narrowing must not remove it.
+    reset();
+    const chain = "submit@checkout.js:12:4 < onClick@checkout.js:80:2";
+    const model = build(
+      [
+        api({ routeTemplate: "/api/a", initiatorChain: chain }),
+        api({ routeTemplate: "/api/b", initiatorChain: chain }),
+      ],
+      [event("navigation_committed", { url: "https://shop.example.com/next" })],
+    );
+    expect(model.candidates).toHaveLength(1);
   });
 
   it("cuts one that runs away anyway, and says it did", () => {
@@ -273,8 +314,8 @@ describe("confidence", () => {
     // explain, which is why the count is kept rather than the segments.
     reset();
     const model = build([
-      api({ routeTemplate: "/api/x", initiatorScript: undefined, initiatorFrame: undefined }),
-      api({ routeTemplate: "/api/y", initiatorScript: undefined, initiatorFrame: undefined }),
+      api({ routeTemplate: "/api/x", initiatorScript: undefined, initiatorChain: undefined }),
+      api({ routeTemplate: "/api/y", initiatorScript: undefined, initiatorChain: undefined }),
     ]);
 
     expect(model.candidates).toHaveLength(0);

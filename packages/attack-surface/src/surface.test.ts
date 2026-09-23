@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { COVERAGE_CAVEAT } from "@browserrecon/coverage";
 import {
   PROVENANCES,
   SURFACE_CAVEAT,
@@ -135,7 +136,10 @@ describe("the caveat travels with the model", () => {
     // A caveat a consumer has to remember to add goes missing exactly when
     // the model is forwarded.
     expect(surface([item()]).coverage_caveat).toBe(SURFACE_CAVEAT);
-    expect(SURFACE_CAVEAT).toMatch(/not an inventory of the application/i);
+    // The same sentence the coverage summary prints. One caveat, so a
+    // report cannot hedge twice in two different ways about one scan.
+    expect(SURFACE_CAVEAT).toBe(COVERAGE_CAVEAT);
+    expect(SURFACE_CAVEAT).toMatch(/not a claim of complete application coverage/i);
   });
 });
 

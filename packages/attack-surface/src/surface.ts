@@ -29,6 +29,8 @@
  * carries and resolves them.
  */
 
+import { COVERAGE_CAVEAT } from "@browserrecon/coverage";
+
 export const SURFACE_SCHEMA_VERSION = "1.0.0";
 
 /** What kind of thing a surface item is. */
@@ -97,10 +99,16 @@ export interface AttackSurface {
   readonly coverage_caveat: string;
 }
 
-export const SURFACE_CAVEAT =
-  "This describes the surface reachable and observed under the target policy, " +
-  "authentication state and budget in force. It is not an inventory of the " +
-  "application.";
+/**
+ * §10C.6's caveat, which is the coverage package's — not a second one.
+ *
+ * It used to be its own sentence here, saying the same thing in different
+ * words. The M3 gate found the two in one output: a report can print the
+ * coverage summary's caveat beside the surface's and read as though the tool
+ * is hedging twice about different things. One wording, defined where the
+ * score that needs it is.
+ */
+export const SURFACE_CAVEAT = COVERAGE_CAVEAT;
 
 /** One link in §35B.5's chain, for `resolveChain`. */
 export interface ChainLink {

@@ -69,14 +69,24 @@ export interface ApiEvent {
   /** The script file. Coarse — a single-bundle app has one for everything. */
   readonly initiatorScript?: string | undefined;
   /**
-   * The call site: `script:line`.
+   * The whole call stack, as one comparable string.
    *
    * What "the same initiator chain" has to mean for §18.1's merge rule to
-   * say anything. Matching on the file alone merges every segment of a
-   * single-bundle application into one candidate — the failure mode the rule
-   * is meant to avoid.
+   * say anything. Two weaker readings both fail, and both fail the same way
+   * — by merging a whole application into one candidate, which is the
+   * failure mode the rule exists to avoid:
+   *
+   *  - The script *file* merges every segment of a single-bundle app.
+   *  - The *top frame* merges every segment of any app with a shared fetch
+   *    wrapper, because `get@api-client.js:42` is the top frame of every
+   *    request it ever makes. That is most applications, and the M3 gate
+   *    found it: five screens of a synthetic SPA, five soft navigations,
+   *    one candidate.
+   *
+   * The frames below the wrapper are what differ, so the comparison is the
+   * chain.
    */
-  readonly initiatorFrame?: string | undefined;
+  readonly initiatorChain?: string | undefined;
   readonly authContext: string;
   readonly dependsOn: readonly string[];
 }

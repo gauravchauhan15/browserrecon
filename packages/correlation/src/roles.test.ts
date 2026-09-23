@@ -56,6 +56,91 @@ describe("the roles that matter", () => {
   });
 });
 
+describe("a page is not an endpoint", () => {
+  /**
+   * The M3 gate found this: a scan of a six-page fixture reported ten APIs,
+   * six of which were the HTML pages the crawler had navigated to and one a
+   * 404 favicon. Every V3 output inherited it — the surface listed documents
+   * as endpoints, coverage counted them as runtime APIs, and workflow
+   * segments were padded with page loads, which is what lifted one fixture's
+   * confidence above the threshold.
+   *
+   * The `application_api` signal had read "first-party request with an
+   * application payload" from the start. Nothing checked the payload.
+   */
+  it("does not call a navigated HTML page an API", () => {
+    expect(
+      roleOf({
+        url: "https://app.test/settings",
+        resourceType: "Document",
+        mimeType: "text/html",
+      }),
+    ).toBe("application_asset");
+  });
+
+  it("does not call a 404 favicon an API", () => {
+    // What the browser asks for on its own, with whatever content type the
+    // server happened to return.
+    expect(
+      roleOf({
+        url: "https://app.test/favicon.ico",
+        resourceType: "Other",
+        mimeType: "text/plain",
+        status: 404,
+      }),
+    ).toBe("application_asset");
+  });
+
+  it("still calls an HTML fragment fetched by script an API", () => {
+    // The counterweight. An HTMX-style partial is an endpoint the
+    // application calls, and the content type alone cannot tell it from a
+    // page — the resource type can.
+    expect(
+      roleOf({
+        url: "https://app.test/partials/cart",
+        resourceType: "Fetch",
+        mimeType: "text/html",
+      }),
+    ).toBe("application_api");
+  });
+
+  it("still calls structured data an API however the browser fetched it", () => {
+    // `Other` covers more than favicons. A resource type on the list is only
+    // decisive when there is no application payload to contradict it.
+    expect(
+      roleOf({
+        url: "https://app.test/api/orders",
+        resourceType: "Other",
+        mimeType: "application/json",
+      }),
+    ).toBe("application_api");
+    expect(
+      roleOf({
+        url: "https://app.test/api/orders",
+        resourceType: "Other",
+        mimeType: "application/vnd.api+json",
+      }),
+    ).toBe("application_api");
+  });
+
+  it("changes nothing when the resource type was not recorded", () => {
+    // Telemetry that never saw a resource type must not lose a real API to
+    // this rule.
+    expect(roleOf({ mimeType: undefined })).toBe("application_api");
+  });
+
+  it("files a third-party page on no list as a third-party widget", () => {
+    // An unlisted iframe is still somebody else's code running in the page.
+    expect(
+      roleOf({
+        url: "https://widgets.example.com/embed",
+        resourceType: "Document",
+        mimeType: "text/html",
+      }),
+    ).toBe("third_party_widget");
+  });
+});
+
 describe("polling is detected structurally, not by domain", () => {
   // §17A.2. Polling to a first-party API is invisible to any tracker list,
   // and it is the noise most likely to be mistaken for a workflow.
@@ -199,5 +284,39 @@ describe("per-consumer filters", () => {
     for (const role of TRAFFIC_ROLES) {
       expect(passesFilter(role, "attack_surface_export"), role).toBe(true);
     }
+  });
+});
+
+describe("an authentication path is not an authentication endpoint", () => {
+  it("does not call a vendor's session-replay bundle auth infrastructure", () => {
+    // AUTH_PATHS matches a substring, and `session` is in `session-replay.js`.
+    // The M3 gate found the noisy fixture reporting a third-party replay
+    // script as the application's own auth infrastructure.
+    expect(
+      roleOf({
+        url: "https://app.test/vendor/session-replay.js",
+        resourceType: "Script",
+        mimeType: "text/javascript",
+      }),
+    ).toBe("application_asset");
+  });
+
+  it("still calls a login page auth infrastructure", () => {
+    // The counterweight. `text/html` is not an asset type, so a login screen
+    // is unaffected — which matters, because §17A.3 wants the auth flow
+    // visible to workflow detection.
+    expect(
+      roleOf({
+        url: "https://app.test/login",
+        resourceType: "Document",
+        mimeType: "text/html",
+      }),
+    ).toBe("auth_infrastructure");
+  });
+
+  it("still calls a token endpoint auth infrastructure", () => {
+    expect(roleOf({ url: "https://app.test/oauth/token", mimeType: "application/json" })).toBe(
+      "auth_infrastructure",
+    );
   });
 });

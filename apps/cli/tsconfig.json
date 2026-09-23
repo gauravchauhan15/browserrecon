@@ -8,6 +8,9 @@
   "exclude": ["src/**/*.test.ts"],
   "references": [
     {
+      "path": "../../packages/attack-surface"
+    },
+    {
       "path": "../../packages/authorization"
     },
     {
@@ -27,6 +30,9 @@
     },
     {
       "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/coverage"
     },
     {
       "path": "../../packages/event-store"

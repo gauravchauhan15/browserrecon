@@ -216,3 +216,46 @@ The general lesson, which is why this is here rather than only in the spike
 note: a bound expressed in the wrong units is not a weak bound, it is no
 bound. It would have passed review and shown green tests while protecting
 nothing.
+
+### A signal string is not a check (BR-M3-12)
+
+§17A's `application_api` verdict has carried the signal "first-party request
+with an application payload" since it was written. Nothing checked the
+payload. A scan of a six-page fixture reported ten APIs: six were the HTML
+pages themselves, a seventh a 404 favicon.
+
+Three variations of the same mistake were found in one afternoon at the M3
+gate, and they are recorded together because the pattern matters more than any
+one of them:
+
+- The `application_api` signal described a check that did not exist.
+- §17A.2's polling rule needs an interval; the model passed a repeat count and
+  no interval, so the rule's first line returned false on every request ever
+  classified. Its unit tests pass because they hand the classifier an interval
+  directly.
+- `AUTH_PATHS` matches a substring, so a vendor's `session-replay.js` was
+  reported as the application's own authentication infrastructure.
+
+All three were invisible to 1721 passing tests, because in each case both
+sides of the seam were internally consistent and tested against their own
+idea of the payload. The general lesson: **a rule's unit test proves the rule,
+not that anything reaches it.** A guarantee is only real once something has
+run it end to end on data it did not construct.
+
+### Narrowing a rule once is not enough (BR-M3-12)
+
+§18.1 says to merge adjacent workflow segments that "share an initiator
+chain". Read as the same script *file*, that merges every segment of a
+single-bundle application into one candidate — §18.1's own "one giant SPA
+workflow" failure mode, produced by the step meant to prevent it. The rule was
+narrowed to the top *frame*.
+
+It shares a top frame too, as soon as it has an `api.get()` wrapper. That is
+most applications. The same failure returned one level down, and the M3 gate
+found it: five screens, five soft navigations, one candidate.
+
+The comparison is now the whole chain, which is what the plan's words say. The
+lesson is about the first fix rather than the second: narrowing from "the
+file" to "the top frame" felt like the fix because it made the failing case
+pass. It addressed one instance of "the shared prefix is not the call site",
+not the class.

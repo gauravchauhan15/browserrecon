@@ -103,9 +103,11 @@ function dependencyCrosses(left: Segment, right: Segment): boolean {
  * named "one giant SPA workflow" failure mode, produced by the step meant to
  * improve things.
  *
- * So the initiator has to match at the *call site* — script and line — which
- * is what "the same chain" has to mean for the rule to say anything. A
- * dependency edge merges on its own.
+ * So the initiator has to match across the whole *stack*, which is what "the
+ * same chain" has to mean for the rule to say anything. The top frame alone
+ * is not enough either: an application with a shared fetch wrapper has the
+ * same top frame on every request it makes, so that reading reproduces the
+ * same failure one level down. A dependency edge merges on its own.
  *
  * Erring toward not merging is the cheap direction: several candidates
  * describing one flow is something a reader can see and join, while one
@@ -114,11 +116,11 @@ function dependencyCrosses(left: Segment, right: Segment): boolean {
 function shouldMerge(left: Segment, right: Segment): boolean {
   if (dependencyCrosses(left, right)) return true;
 
-  const frames = new Set(
-    left.events.map((event) => event.initiatorFrame).filter((frame) => frame !== undefined),
+  const chains = new Set(
+    left.events.map((event) => event.initiatorChain).filter((chain) => chain !== undefined),
   );
   return right.events.some(
-    (event) => event.initiatorFrame !== undefined && frames.has(event.initiatorFrame),
+    (event) => event.initiatorChain !== undefined && chains.has(event.initiatorChain),
   );
 }
 

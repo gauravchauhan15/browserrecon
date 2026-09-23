@@ -92,6 +92,15 @@ export interface VisitOutcome {
   readonly forms: PageHarvest["forms"];
 }
 
+/** The origin of a URL, or the URL itself when it will not parse. */
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return url;
+  }
+}
+
 const DEFAULT_SETTLE_MS = 2_000;
 const DEFAULT_DRAIN_MS = 400;
 const DEFAULT_MAX_INTERACTIONS = 6;
@@ -117,6 +126,8 @@ export function createRunner(options: RunnerOptions): Runner {
   const log = options.logger ?? silentLogger();
   const engine = new PolicyEngine(options.policy);
   const forms: { page: string; form: PageHarvest["forms"][number] }[] = [];
+  /** Tools already reported, by origin and name. An SPA re-registers often. */
+  const webmcpSeen = new Set<string>();
 
   let session: BrowserSession | undefined;
   let adapter: BrowserAdapter | undefined;
@@ -366,6 +377,31 @@ export function createRunner(options: RunnerOptions): Runner {
       const page = harvested.value;
       for (const form of page.forms) {
         forms.push({ page: page.url, form });
+      }
+
+      // §21, §44: a registered tool is an operation the page publishes to
+      // any agent that visits, and registering one sends nothing — so this
+      // is the only place in the pipeline that can ever see it. Deduplicated
+      // across the scan, because an SPA re-registers on every screen.
+      for (const tool of page.webmcpTools) {
+        const key = `${originOf(page.url)} ${tool.name}`;
+        if (webmcpSeen.has(key)) continue;
+        webmcpSeen.add(key);
+
+        await options.bus.publish({
+          type: "webmcp_tool_discovered",
+          provenance: "observed",
+          auth_context: "anonymous",
+          payload: {
+            name: tool.name,
+            ...(tool.description === undefined ? {} : { description: tool.description }),
+            ...(tool.inputSchema === undefined ? {} : { inputSchema: tool.inputSchema }),
+            ...(tool.endpoint === undefined ? {} : { endpoint: tool.endpoint }),
+            origin: originOf(page.url),
+            url: page.url,
+            registry: tool.registry,
+          },
+        });
       }
 
       // Interact before collecting links: a click can add links to the page,

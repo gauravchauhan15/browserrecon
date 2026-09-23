@@ -18,12 +18,14 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
+    "@browserrecon/attack-surface": "workspace:*",
     "@browserrecon/authorization": "workspace:*",
     "@browserrecon/browser-manager": "workspace:*",
     "@browserrecon/browser-runner": "workspace:*",
     "@browserrecon/collector-network": "workspace:*",
     "@browserrecon/config": "workspace:*",
     "@browserrecon/core": "workspace:*",
+    "@browserrecon/coverage": "workspace:*",
     "@browserrecon/deterministic-explorer": "workspace:*",
     "@browserrecon/event-store": "workspace:*",
     "@browserrecon/events": "workspace:*",

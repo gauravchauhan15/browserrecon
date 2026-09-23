@@ -49,6 +49,7 @@ import {
   type HarvestedControl,
   type HarvestedForm,
   type NavigationOutcome,
+  type HarvestedWebMcpTool,
   type PageHarvest,
   type ScrollDirection,
   type SettledOutcome,
@@ -237,7 +238,65 @@ function readHarvest(): Omit<PageHarvest, "url"> {
     });
   }
 
-  return { links, forms, controls };
+  /**
+   * WebMCP registries — build plan §21.
+   *
+   * The spec is young, so this reads a short list of shapes rather than one,
+   * records which registry answered, and treats anything it does not
+   * recognise as absence. Almost no site has this: a collector that warned
+   * or explained itself here would be noise on every scan.
+   *
+   * Bounded deliberately. A page controls what is in its registry, and a
+   * thousand tools with megabyte schemas would otherwise be serialised
+   * straight out of the browser and into the event log.
+   */
+  const MAX_TOOLS = 100;
+  const MAX_SCHEMA_CHARS = 8_000;
+  const registries: readonly [string, unknown][] = [
+    ["navigator.modelContext", (navigator as unknown as Record<string, unknown>).modelContext],
+    ["navigator.mcp", (navigator as unknown as Record<string, unknown>).mcp],
+    ["window.agent", (window as unknown as Record<string, unknown>).agent],
+  ];
+
+  const webmcpTools: HarvestedWebMcpTool[] = [];
+  const named = new Set<string>();
+  for (const [registry, value] of registries) {
+    const tools = (value as { tools?: unknown } | undefined)?.tools;
+    if (!Array.isArray(tools)) continue;
+
+    for (const raw of tools.slice(0, MAX_TOOLS)) {
+      const tool = raw as Record<string, unknown>;
+      const name = typeof tool.name === "string" ? tool.name : undefined;
+      if (name === undefined || name === "" || named.has(name)) continue;
+      named.add(name);
+
+      let schema: unknown;
+      try {
+        const encoded = JSON.stringify(tool.inputSchema);
+        if (encoded !== undefined && encoded.length <= MAX_SCHEMA_CHARS) {
+          schema = JSON.parse(encoded);
+        }
+      } catch {
+        // A schema with a cycle, a getter that throws, or a BigInt in it.
+        // The tool's existence is the finding; its schema is a bonus.
+        schema = undefined;
+      }
+
+      webmcpTools.push({
+        name: name.slice(0, 200),
+        ...(typeof tool.description === "string"
+          ? { description: tool.description.slice(0, 500) }
+          : {}),
+        ...(schema === undefined ? {} : { inputSchema: schema }),
+        ...(typeof tool.endpoint === "string"
+          ? { endpoint: tool.endpoint.slice(0, 2_000) }
+          : {}),
+        registry,
+      });
+    }
+  }
+
+  return { links, forms, controls, webmcpTools };
 }
 
 function withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {

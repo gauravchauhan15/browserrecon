@@ -363,3 +363,72 @@ describe("determinism", () => {
     expect(JSON.stringify(buildApiModel(events))).toBe(JSON.stringify(buildApiModel(events)));
   });
 });
+
+describe("§17A.2's repeat signal reaches the classifier", () => {
+  /**
+   * The seam, not the rule. `classifyTraffic` has always known how to
+   * recognise a heartbeat, and its own tests pass because they hand it an
+   * interval. The model passed a running count and no interval at all, which
+   * makes `looksLikePolling` return false on its first line — so no scan has
+   * ever filed a single request as `polling_heartbeat`, and every heartbeat
+   * went into the API inventory and on into workflow detection.
+   */
+  const at = (
+    url: string,
+    msSinceEpoch: number,
+    options: RequestOptions = {},
+  ): EventEnvelope[] =>
+    call(url, options).map((envelope) => ({
+      ...envelope,
+      timestamp: new Date(msSinceEpoch).toISOString(),
+    }));
+
+  it("recognises a timer as polling and keeps it out of the API model", () => {
+    const events = [
+      event("navigation_committed", { url: `${ORIGIN}/` }),
+      ...[0, 5_000, 10_000, 15_000, 20_000].flatMap((ms) => at(`${ORIGIN}/api/heartbeat`, ms)),
+      ...at(`${ORIGIN}/api/orders`, 1_000),
+    ];
+    const model = build(events);
+
+    expect(model.apis.map((api) => api.identity.pathTemplate)).toEqual(["/api/orders"]);
+    expect(model.excluded).toContainEqual({ role: "polling_heartbeat", count: 5 });
+  });
+
+  it("does not call an endpoint a person kept clicking a heartbeat", () => {
+    // The counterweight §17A.2 names: the interaction signal outranks the
+    // interval, because a person clicking a reload button five times can
+    // produce gaps as even as a timer's.
+    const events = [
+      event("navigation_committed", { url: `${ORIGIN}/` }),
+      ...[0, 5_000, 10_000, 15_000, 20_000].flatMap((ms) => [
+        event("interaction", { interactionId: `int_${ms}` }),
+        ...at(`${ORIGIN}/api/inbox`, ms),
+      ]),
+    ];
+    const model = build(events);
+
+    expect(model.apis.map((api) => api.identity.pathTemplate)).toEqual(["/api/inbox"]);
+  });
+
+  it("does not call an uneven repeat a heartbeat", () => {
+    // Jitter above §17A.2's 25% is a person or a queue, not a clock.
+    const events = [0, 400, 9_000, 9_200, 30_000].flatMap((ms) =>
+      at(`${ORIGIN}/api/events`, ms),
+    );
+    expect(build(events).apis).toHaveLength(1);
+  });
+
+  it("judges an endpoint once, not once per call", () => {
+    // The compounding half of the defect. A bucket takes the role of its
+    // first observation and never revises it, so a running count could not
+    // have promoted anything to `polling_heartbeat` after the first call
+    // however it behaved afterwards — the endpoint would have kept two
+    // observations in the model and dropped the rest.
+    const events = [0, 5_000, 10_000, 15_000].flatMap((ms) => at(`${ORIGIN}/api/ping`, ms));
+    const model = build(events);
+
+    expect(model.apis).toEqual([]);
+    expect(model.excluded).toContainEqual({ role: "polling_heartbeat", count: 4 });
+  });
+});

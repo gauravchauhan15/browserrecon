@@ -182,6 +182,83 @@ const DEFAULT_ROLES: ReadonlySet<TrafficRole> = new Set<TrafficRole>(["applicati
  * itself is streamed off disk by the caller; this sees only what survived
  * the role filter.
  */
+/**
+ * How often each endpoint was called, how evenly, and whether anyone clicked.
+ *
+ * §17A.2's polling signal needs an interval and its jitter. The model used to
+ * pass a running repeat count and nothing else, so `looksLikePolling` — which
+ * returns false the moment the interval is absent — could never fire: every
+ * heartbeat in every scan was filed as an application API. Its unit tests
+ * passed because they hand the classifier an interval directly.
+ *
+ * Two things follow from measuring it here, in a pass of its own:
+ *
+ *  - The statistics are the endpoint's, not one call's. A running count means
+ *    the first two calls classify one way and the third another, and the
+ *    bucket keeps whichever verdict arrived first — so an endpoint could not
+ *    become a heartbeat after its first observation however it behaved later.
+ *  - Every observation of an endpoint therefore classifies identically, which
+ *    is what makes the role a property of the endpoint rather than of
+ *    whichever call happened to be recorded first.
+ */
+interface RepeatStats {
+  readonly count: number;
+  readonly intervalMs?: number | undefined;
+  readonly jitter?: number | undefined;
+  readonly followedInteraction: boolean;
+}
+
+function repeatStatistics(events: readonly EventEnvelope[]): ReadonlyMap<string, RepeatStats> {
+  const times = new Map<string, number[]>();
+  const clicked = new Set<string>();
+  let interactionId: string | undefined;
+
+  for (const envelope of events) {
+    if (envelope.type === "navigation_committed" || envelope.type === "page_loaded") {
+      interactionId = undefined;
+      continue;
+    }
+    if (envelope.type === "interaction") {
+      interactionId = (envelope.payload as { interactionId?: string }).interactionId;
+      continue;
+    }
+    if (envelope.type !== "network_request") continue;
+
+    const payload = envelope.payload as RequestPayload;
+    const key = `${payload.method} ${normalizeUrl(payload.url).identity}`;
+    const at = Date.parse(envelope.timestamp);
+    times.set(key, [...(times.get(key) ?? []), Number.isNaN(at) ? 0 : at]);
+    if (interactionId !== undefined) clicked.add(key);
+  }
+
+  const stats = new Map<string, RepeatStats>();
+  for (const [key, samples] of times) {
+    const followedInteraction = clicked.has(key);
+    if (samples.length < 2) {
+      stats.set(key, { count: samples.length, followedInteraction });
+      continue;
+    }
+
+    const gaps: number[] = [];
+    for (let index = 1; index < samples.length; index += 1) {
+      gaps.push((samples[index] as number) - (samples[index - 1] as number));
+    }
+    const mean = gaps.reduce((total, gap) => total + gap, 0) / gaps.length;
+    // Jitter is relative, so a zero mean has none to express. Requests
+    // recorded within the same millisecond are a burst, not a timer, and a
+    // burst has no interval for §17A.2 to reason about.
+    const variance = gaps.reduce((total, gap) => total + (gap - mean) ** 2, 0) / gaps.length;
+    const jitter = mean === 0 ? undefined : Math.sqrt(variance) / Math.abs(mean);
+
+    stats.set(key, {
+      count: samples.length,
+      ...(mean === 0 ? {} : { intervalMs: mean, jitter }),
+      followedInteraction,
+    });
+  }
+  return stats;
+}
+
 export function buildApiModel(
   events: readonly EventEnvelope[],
   options: BuildApiModelOptions = {},
@@ -194,8 +271,8 @@ export function buildApiModel(
   // met rather than whichever sorts first.
   const order: string[] = [];
 
-  /** Times each method+identity has been seen, for §17A.2's repeat signal. */
-  const seenCount = new Map<string, number>();
+  /** §17A.2's repeat signal, measured over the whole log before this pass. */
+  const repeats = repeatStatistics(events);
   /**
    * Identifiers each response carried, and what each request carried forward.
    *
@@ -254,8 +331,7 @@ export function buildApiModel(
     pending.delete(key);
 
     const identityKey = `${request.payload.method} ${request.url.identity}`;
-    const repeats = (seenCount.get(identityKey) ?? 0) + 1;
-    seenCount.set(identityKey, repeats);
+    const repeat = repeats.get(identityKey);
 
     const verdict = classifyTraffic({
       url: request.url.raw,
@@ -271,8 +347,12 @@ export function buildApiModel(
         : { initiatorType: request.payload.initiator.type }),
       // §17A.2's strongest structural signal: traffic a person caused looks
       // different from traffic a timer caused. We know which, so we say.
-      followedInteraction: interactionId !== undefined,
-      repeatCount: repeats,
+      // Taken over every call to this endpoint: one click anywhere in the
+      // scan is enough to say a person can cause it.
+      followedInteraction: repeat?.followedInteraction ?? interactionId !== undefined,
+      repeatCount: repeat?.count ?? 1,
+      ...(repeat?.intervalMs === undefined ? {} : { repeatIntervalMs: repeat.intervalMs }),
+      ...(repeat?.jitter === undefined ? {} : { repeatJitter: repeat.jitter }),
     });
 
     if (!keep.has(verdict.role)) {

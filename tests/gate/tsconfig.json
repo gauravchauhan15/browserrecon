@@ -14,6 +14,9 @@
       "path": "../../packages/api-model"
     },
     {
+      "path": "../../packages/attack-surface"
+    },
+    {
       "path": "../../packages/auth"
     },
     {
@@ -21,6 +24,12 @@
     },
     {
       "path": "../../packages/collectors/javascript-discovery"
+    },
+    {
+      "path": "../../packages/correlation"
+    },
+    {
+      "path": "../../packages/coverage"
     },
     {
       "path": "../../packages/event-store"
@@ -33,6 +42,9 @@
     },
     {
       "path": "../../packages/orchestrator"
+    },
+    {
+      "path": "../../packages/workflows"
     }
   ]
 }

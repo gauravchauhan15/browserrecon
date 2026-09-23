@@ -36,6 +36,7 @@ import { createBrowserNativeDiscovery, createRunner } from "@browserrecon/browse
 import { resolveChromePath, type ChromeProbes } from "@browserrecon/browser-manager";
 import { CONFIG_SPEC, formatConfigErrors, loadConfig } from "@browserrecon/config";
 import { createRedactor, createSecureOutputDir, IdFactory } from "@browserrecon/core";
+import type { GapInput, GapReason } from "@browserrecon/coverage";
 import {
   collectNetwork,
   type NetworkModel,
@@ -44,6 +45,8 @@ import {
 import { createQueue, type SkipReason } from "@browserrecon/deterministic-explorer";
 import { EventBus } from "@browserrecon/events";
 import { EventStore, LAYOUT } from "@browserrecon/event-store";
+import { assemble, validateSurface, type AssembledModel } from "@browserrecon/attack-surface";
+import { readAllEvents } from "@browserrecon/event-store";
 import { renderReport } from "@browserrecon/exporter-markdown";
 import {
   COVERAGE_CAVEAT,
@@ -255,6 +258,7 @@ export async function scan(input: ScanCommandInput): Promise<void> {
   });
 
   const excluded: { url: string; reason: string }[] = [];
+  let assembled: AssembledModel | undefined;
   const discovery = [
     createBrowserNativeDiscovery({
       // The same engine the queue and the adapter use. A sitemap index
@@ -325,8 +329,24 @@ export async function scan(input: ScanCommandInput): Promise<void> {
         },
       },
       export: {
-        write: async (exportInput) =>
-          writeArtifacts(
+        write: async (exportInput) => {
+          // Flushed first: the assembly reads the log back, and an event
+          // still in a buffer is an event the model will not see.
+          store.checkpoint();
+
+          // The whole V3 pipeline, from the log the scan just wrote. Built
+          // here rather than from the in-memory collector so the artifacts
+          // and a later `browserrecon export` of the same session cannot
+          // disagree — the log is the source of truth (§22.1).
+          assembled = assemble({
+            sessionId,
+            target: policy.targetOrigin,
+            events: await readAllEvents(sessionDir),
+            firstPartyOrigins: [...policy.allowedOrigins],
+            unreached: gapInputs(queue.skipped, excluded, queue.pending),
+          });
+
+          return writeArtifacts(
             sessionDir,
             sessionId,
             startedAt,
@@ -335,7 +355,9 @@ export async function scan(input: ScanCommandInput): Promise<void> {
             exportInput,
             network.model,
             summarizeGaps(queue.skipped, excluded, queue.pending),
-          ),
+            assembled,
+          );
+        },
       },
       clock: {
         now: () => Date.now(),
@@ -411,6 +433,59 @@ export async function scan(input: ScanCommandInput): Promise<void> {
  * made a clean scan look like it had lost five pages.
  */
 const NOT_A_GAP: ReadonlySet<string> = new Set(["already_visited", "duplicate_in_queue"]);
+
+/**
+ * Turn what the scan could not reach into §10C.7's gap vocabulary.
+ *
+ * The queue's own skip reasons and the coverage engine's are different
+ * taxonomies for different readers — one is about why a URL was not queued,
+ * the other about what a user could do next — so the mapping is explicit
+ * rather than a cast, and anything unrecognised becomes `budget_exhausted`
+ * rather than being dropped.
+ */
+function gapInputs(
+  skipped: readonly { readonly url: string; readonly reason: string }[],
+  excludedControls: readonly { readonly url: string; readonly reason: string }[],
+  stillQueued: number,
+): GapInput[] {
+  const toReason = (reason: string): GapReason => {
+    if (
+      reason === "out_of_scope" ||
+      reason === "policy_denied" ||
+      reason === "robots_excluded"
+    ) {
+      return "policy_excluded";
+    }
+    if (reason === "not_http") return "not_navigable";
+    if (reason.includes("destructive") || reason.includes("state_changing"))
+      return "requires_state";
+    if (reason === "authentication_form") return "requires_role";
+    if (reason === "method_not_allowed") return "policy_excluded";
+    return "budget_exhausted";
+  };
+
+  const gaps: GapInput[] = [];
+  for (const entry of [...skipped, ...excludedControls]) {
+    if (NOT_A_GAP.has(entry.reason)) continue;
+    gaps.push({
+      type: "unobserved_route",
+      candidate: entry.url,
+      reason: toReason(entry.reason),
+      ...(entry.reason === "method_not_allowed"
+        ? { blockedBecause: "policy.allowed_methods excludes the form's method" }
+        : {}),
+    });
+  }
+
+  if (stillQueued > 0) {
+    gaps.push({
+      type: "unobserved_route",
+      candidate: `${stillQueued} URL(s) still queued when the budget ran out`,
+      reason: "budget_exhausted",
+    });
+  }
+  return gaps;
+}
 
 /** Group skip reasons into §10C.7's counts, commonest first. */
 function summarizeGaps(
@@ -523,6 +598,7 @@ async function writeArtifacts(
   },
   model: NetworkModel,
   gaps: readonly { readonly reason: string; readonly count: number }[],
+  assembled: AssembledModel,
 ): Promise<readonly string[]> {
   const redactor = createRedactor();
   const jsonPath = join(sessionDir, "attack-surface.json");
@@ -578,6 +654,40 @@ async function writeArtifacts(
   }
   writeFileSync(jsonPath, serialized, { mode: 0o600 });
 
+  // §23's scanner-consumable model, validated against its own contract
+  // before it is written. §35B.5 calls an unresolvable source id a bug, and
+  // a bug is better caught here than by whoever imports the file.
+  const surfacePath = join(sessionDir, "surface.json");
+  const surfaceProblems = validateSurface(assembled.surface, {
+    knownWorkflows: new Set(assembled.workflows.candidates.map((c) => c.workflow_id)),
+    knownApis: new Set(assembled.api.apis.map((entry) => entry.api_id)),
+    knownEvents: new Set(assembled.surface.items.flatMap((item) => item.source_event_ids)),
+    knownInteractions: new Set(
+      assembled.api.apis.flatMap((entry) =>
+        entry.observations
+          .map((observation) => observation.interactionId)
+          .filter((id): id is string => id !== undefined),
+      ),
+    ),
+    knownNavigations: new Set(
+      assembled.api.apis.flatMap((entry) =>
+        entry.observations
+          .map((observation) => observation.navigationId)
+          .filter((id): id is string => id !== undefined),
+      ),
+    ),
+  });
+  if (surfaceProblems.length > 0) {
+    throw new Error(
+      `the attack surface does not satisfy its own contract:\n  ${surfaceProblems
+        .map((entry) => `${entry.surface_id}: ${entry.problem}`)
+        .join("\n  ")}`,
+    );
+  }
+  writeFileSync(surfacePath, `${JSON.stringify(assembled.surface, null, 2)}\n`, {
+    mode: 0o600,
+  });
+
   writeFileSync(
     reportPath,
     renderReport({
@@ -624,7 +734,7 @@ async function writeArtifacts(
     { mode: 0o600 },
   );
 
-  return [reportPath, jsonPath];
+  return [reportPath, jsonPath, surfacePath];
 }
 
 /** §10C.7: a gap with no action is a number a user cannot move. */
