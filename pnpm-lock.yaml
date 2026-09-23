@@ -559,6 +559,15 @@ importers:
         specifier: workspace:*
         version: link:../policy
 
+  packages/state-model:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../events
+
   packages/test-utils: {}
 
   packages/workflows:

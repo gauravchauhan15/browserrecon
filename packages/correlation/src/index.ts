@@ -8,5 +8,14 @@
  */
 export const PACKAGE_NAME = "@browserrecon/correlation" as const;
 
+export {
+  buildDependencyGraph,
+  confidenceFor,
+  cycles,
+  inDependencyOrder,
+  prerequisitesOf,
+} from "./dependency-graph.js";
+export type { DependencyEdge, DependencyGraph, EdgeInput } from "./dependency-graph.js";
+
 export { CONSUMER_FILTERS, TRAFFIC_ROLES, classifyTraffic, passesFilter } from "./roles.js";
 export type { ObservationForRole, RoleVerdict, TrafficRole } from "./roles.js";

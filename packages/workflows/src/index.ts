@@ -21,5 +21,14 @@ export {
 } from "./signals.js";
 export type { ApiEvent, BoundarySignal, SignalKind, SignalStrength } from "./signals.js";
 
+export { WORKFLOW_RELATIONSHIPS, buildWorkflowGraph, structuralEdges } from "./graph.js";
+export type {
+  BuildGraphInput,
+  TransitionForGraph,
+  WorkflowEdge,
+  WorkflowGraph,
+  WorkflowRelationship,
+} from "./graph.js";
+
 export { buildWorkflowCandidates } from "./candidates.js";
 export type { BuildInput, WorkflowCandidate, WorkflowModel } from "./candidates.js";

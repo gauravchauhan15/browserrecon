@@ -96,6 +96,9 @@
       "path": "./packages/rate-controller"
     },
     {
+      "path": "./packages/state-model"
+    },
+    {
       "path": "./packages/test-utils"
     },
     {
