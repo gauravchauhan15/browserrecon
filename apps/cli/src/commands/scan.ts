@@ -168,7 +168,13 @@ export async function scan(input: ScanCommandInput): Promise<void> {
 
   // ---- 4. the session directory -------------------------------------------
   const outputRoot = (resolved.config.output as { dir?: string } | undefined)?.dir ?? ".output";
-  const ids = new IdFactory(nextSessionOrdinal(outputRoot));
+  // One ordinal, used by everything that stamps a session id. The bus keeps
+  // its own IdFactory for event ids, and while both were hardcoded to 1 they
+  // agreed by accident; the moment the directory could be `sess_0002` its
+  // events still said `sess_0001`, so every `source_event_ids` in the second
+  // scan pointed at the first one's session.
+  const sessionOrdinal = nextSessionOrdinal(outputRoot);
+  const ids = new IdFactory(sessionOrdinal);
   const sessionId = ids.sessionId;
   const sessionDir = join(outputRoot, sessionId);
   // 0700 before a single byte is written: everything below this point is
@@ -176,7 +182,7 @@ export async function scan(input: ScanCommandInput): Promise<void> {
   createSecureOutputDir(sessionDir);
 
   const store = new EventStore({ dir: sessionDir, sessionId });
-  const bus = new EventBus();
+  const bus = new EventBus({ sessionOrdinal });
   const network = collectNetwork(bus);
 
   // Persist everything the bus carries. Subscribed before the browser

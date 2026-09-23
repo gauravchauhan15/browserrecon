@@ -87,11 +87,22 @@ submitted, posted, or deleted.
 ### If it stops early
 
 That is usually correct, and the summary says which budget or policy stopped
-it. To continue where it left off:
+it.
+
+`resume` is not finished in this build. It validates the session and then
+says so rather than pretending — the §30 boundary check is real, and it will
+tell you precisely which setting changed if you try to resume with a
+different one. The engine behind it lands later, and `--seed-from` is not
+wired either.
+
+Until then, raise the budget and scan again:
 
 ```bash
-node apps/cli/bin/browserrecon.js resume sess_0001
+node apps/cli/bin/browserrecon.js scan https://your-target.example.com --max-pages 40 --out ~/browserrecon-runs
 ```
+
+Each run gets its own `sess_NNNN` directory, so pointing every scan at the
+same `--out` is fine — the runs sit side by side and diff cleanly.
 
 ---
 
@@ -105,13 +116,24 @@ node apps/cli/bin/browserrecon.js scan https://your-target.example.com --rate-pr
 
 Useful additions, depending on the target:
 
-| Flag                                    | When                                                               |
-| --------------------------------------- | ------------------------------------------------------------------ |
-| `--allowed-origins a.example,b.example` | The app spans more than one origin you are authorised for          |
-| `--import-urls urls.txt`                | You already have a URL list from another crawler; `-` reads stdin  |
-| `--no-headless`                         | The target treats headless Chrome differently                      |
-| `--thoroughness deep`                   | More exploration per page. Does **not** change the request rate    |
-| `--probe-liveness`                      | Send `HEAD`/`OPTIONS` to candidates found in JS but never observed |
+| Flag                                    | When                                                            |
+| --------------------------------------- | --------------------------------------------------------------- |
+| `--allowed-origins a.example,b.example` | The app spans more than one origin you are authorised for       |
+| `--no-headless`                         | The target treats headless Chrome differently                   |
+| `--thoroughness deep`                   | More exploration per page. Does **not** change the request rate |
+| `--concurrency 2` / `--rps 1`           | The target is fragile, or you want to be gentler than `polite`  |
+| `--no-katana`                           | Discovery is browser-native only, even if Katana is installed   |
+
+### Flags that exist and do nothing yet
+
+`scan --help` is generated from the configuration schema, so it lists settings
+the engine has not been wired to. These parse, and are then ignored:
+
+`--import-urls`, `--seed-from`, `--probe-liveness`, `--max-steps`, `--ai`,
+`--model`, `--ai-endpoint`.
+
+The AI flags are V4 and say so. The other three have implementations that
+nothing calls yet. Do not read a result as evidence about any of them.
 
 ---
 

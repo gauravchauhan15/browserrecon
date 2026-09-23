@@ -150,6 +150,28 @@ and the gate finds sections by name — a test pinned to `## 5. JavaScript`
 reads the wrong section after an insertion and passes anyway, which is worse
 than failing.
 
+## Every scan was session one
+
+Writing the Gate A runbook meant running the commands in it, which is how
+this was found: the session ordinal was hardcoded, so every scan was
+`sess_0001`, and a second scan into the same `--out` died on the event
+store's own guard — "already holds session sess_0001" — as an internal error
+with a stack trace. The guard was right; two scans were about to share one
+log.
+
+Pointing every run at one output directory is the natural thing to do, and
+the runbook says to, so this was the second command anybody would have run.
+
+Under it was a second one. `EventBus` keeps its own `IdFactory` for event
+ids, and it was hardcoded to ordinal 1 as well. While both were, they agreed
+by accident. The moment the directory could be `sess_0002`, its events still
+said `sess_0001` — so every `source_event_ids` in the second scan resolved
+against the first scan's session, which is §35B.5 broken in the quietest
+possible way. One ordinal now, passed to both.
+
+The gate runs two scans into one directory and checks that each keeps its own
+log with its own session id.
+
 ## A benchmark that measured the machine
 
 `spike.bench.test.ts` bounds tree-sitter at ten seconds for a 7.3 MiB bundle,
@@ -275,6 +297,15 @@ live scan anywhere.
 - **No authenticated scan.** Still no fixture with a login form, so the state
   model has never seen an auth transition on the wire and every observation in
   every gate scan is `anonymous`.
+- **Seven flags parse and are then ignored.** `scan --help` is generated from
+  the configuration schema, so it advertises settings the engine has not been
+  wired to: `--import-urls`, `--seed-from`, `--probe-liveness`, `--max-steps`,
+  `--ai`, `--model`, `--ai-endpoint`. Three of them have implementations that
+  nothing calls; the AI ones are V4. Found by running the Gate A runbook's own
+  commands, which is also the only reason the generated help had ever been
+  read against the engine. `docs/testing.md` names them.
+- **`resume` validates and then refuses.** The §30 boundary check is real and
+  reports exactly which setting changed; the engine behind it is not built.
 - **Liveness probes and the differential are unexercised end to end.** Both are
   opt-in, both are unit-tested, and no scan has run either.
 - **`assemble` is not the CLI's only path to these numbers.** The scan command
