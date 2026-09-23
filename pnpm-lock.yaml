@@ -561,6 +561,18 @@ importers:
 
   packages/test-utils: {}
 
+  packages/workflows:
+    dependencies:
+      '@browserrecon/api-model':
+        specifier: workspace:*
+        version: link:../api-model
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../events
+
   tests/gate:
     dependencies:
       '@browserrecon/api-model':
