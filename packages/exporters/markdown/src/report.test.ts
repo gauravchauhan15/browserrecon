@@ -1,5 +1,6 @@
 import { UNREDACTED_OUTPUT_WARNING } from "@browserrecon/core";
 import { describe, expect, it } from "vitest";
+import { COVERAGE_CAVEAT } from "@browserrecon/coverage";
 import { SECTION_ORDER, isTierGated, renderReport, type ReportInput } from "./index.js";
 
 function report(overrides: Partial<ReportInput> = {}): ReportInput {
@@ -18,6 +19,7 @@ function report(overrides: Partial<ReportInput> = {}): ReportInput {
     coverage: [{ dimension: "Pages", observed: 24, discovered: 61 }],
     workflows: [],
     apis: [],
+    webmcpTools: [],
     origins: [],
     javascript: [],
     barriers: [],
@@ -38,7 +40,7 @@ const workflow = (confidence: number, id = "wf_0001") => ({
 });
 
 describe("section order", () => {
-  it("renders the nine sections in §35B.2's order", () => {
+  it("renders every section in §35B.2's order", () => {
     const markdown = renderReport(report({ hypotheses: [] }));
     const positions = SECTION_ORDER.map((section) => markdown.indexOf(section));
 
@@ -94,14 +96,14 @@ describe("the tier-gated section", () => {
     // found nothing", which is a stronger claim than "we did not look".
     const markdown = renderReport(report());
     expect(markdown).not.toContain("Security hypotheses");
-    expect(markdown).not.toContain("## 9.");
+    expect(markdown).not.toContain("## 10.");
   });
 
   it("is rendered when the tier ran, even if it found nothing", () => {
     // The distinction that makes the omission meaningful: `[]` means we
     // looked. `undefined` means we did not.
     const markdown = renderReport(report({ hypotheses: [] }));
-    expect(markdown).toContain("## 9. Security hypotheses");
+    expect(markdown).toContain("## 10. Security hypotheses");
   });
 
   it("says hypotheses are not findings", () => {
@@ -186,8 +188,10 @@ describe("what the report refuses to claim", () => {
     // §10C.6. A caveat nobody scrolls to is a caveat nobody reads, so it is
     // asserted to appear before the first section.
     const markdown = renderReport(report());
-    expect(markdown).toMatch(/not\n?> everything that exists/);
-    expect(markdown.indexOf("everything that exists")).toBeLessThan(
+    // The coverage package's sentence, not a paraphrase of it: this used to
+    // be a fourth wording of one promise.
+    expect(markdown).toContain(`> ${COVERAGE_CAVEAT}`);
+    expect(markdown.indexOf("complete application coverage")).toBeLessThan(
       markdown.indexOf(`## 1. ${SECTION_ORDER[0]}`),
     );
   });
@@ -201,7 +205,7 @@ describe("what the report refuses to claim", () => {
   });
 
   it("renders the gaps section whether or not there are gaps", () => {
-    expect(renderReport(report())).toContain("## 7. Coverage gaps");
+    expect(renderReport(report())).toContain("## 8. Coverage gaps");
   });
 
   it("gives every gap a remedy", () => {
@@ -277,5 +281,38 @@ describe("sizes", () => {
     expect(markdown).toContain("47 KB");
     expect(markdown).toContain("412 B");
     expect(markdown).toContain("3.3 MB");
+  });
+});
+
+describe("WebMCP tools", () => {
+  it("lists what the page publishes to agents", () => {
+    // §21, §44. A tool registration sends no network traffic, so this
+    // section is the only place in the report a reader can learn that the
+    // page hands any visiting agent a named operation.
+    const markdown = renderReport(
+      report({
+        webmcpTools: [
+          {
+            name: "deleteAccount",
+            endpoint: "/api/account",
+            description: "Permanently delete the signed-in account.",
+          },
+        ],
+      }),
+    );
+
+    expect(markdown).toContain("deleteAccount");
+    expect(markdown).toContain("/api/account");
+    // §7.2, in the report rather than only in the code: an exposed
+    // destructive operation is something to name, never something to try.
+    expect(markdown).toContain("never invoked");
+  });
+
+  it("says nothing at all when the page registered none", () => {
+    // The normal case. Almost no site has this, and a section that
+    // explained its own absence would be noise on every report.
+    const markdown = renderReport(report());
+    expect(markdown).toContain(`## 4. ${SECTION_ORDER[3]}`);
+    expect(markdown).not.toContain("never invoked");
   });
 });

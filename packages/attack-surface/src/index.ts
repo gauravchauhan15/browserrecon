@@ -31,4 +31,4 @@ export type {
 export { buildAttackSurfaceSchema } from "./schema.js";
 
 export { assemble } from "./assemble.js";
-export type { AssembleInput, AssembledModel } from "./assemble.js";
+export type { AssembleInput, AssembledModel, WebMcpToolFound } from "./assemble.js";

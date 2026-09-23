@@ -22,8 +22,8 @@
  * of the runner when it was written inline here.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import {
   buildSessionAuthorization,
   defaultRecordPath,
@@ -36,7 +36,7 @@ import { createBrowserNativeDiscovery, createRunner } from "@browserrecon/browse
 import { resolveChromePath, type ChromeProbes } from "@browserrecon/browser-manager";
 import { CONFIG_SPEC, formatConfigErrors, loadConfig } from "@browserrecon/config";
 import { createRedactor, createSecureOutputDir, IdFactory } from "@browserrecon/core";
-import type { GapInput, GapReason } from "@browserrecon/coverage";
+import { NOT_NAVIGABLE_NOTE, type GapInput, type GapReason } from "@browserrecon/coverage";
 import {
   collectNetwork,
   type NetworkModel,
@@ -47,7 +47,7 @@ import { EventBus } from "@browserrecon/events";
 import { EventStore, LAYOUT } from "@browserrecon/event-store";
 import { assemble, validateSurface, type AssembledModel } from "@browserrecon/attack-surface";
 import { readAllEvents } from "@browserrecon/event-store";
-import { renderReport } from "@browserrecon/exporter-markdown";
+import { renderReport, type WorkflowReport } from "@browserrecon/exporter-markdown";
 import {
   COVERAGE_CAVEAT,
   EXPORT_SCHEMA_VERSION,
@@ -167,9 +167,9 @@ export async function scan(input: ScanCommandInput): Promise<void> {
   if (gate.notice !== undefined && gate.notice !== "") input.warn(gate.notice);
 
   // ---- 4. the session directory -------------------------------------------
-  const ids = new IdFactory(1);
-  const sessionId = ids.sessionId;
   const outputRoot = (resolved.config.output as { dir?: string } | undefined)?.dir ?? ".output";
+  const ids = new IdFactory(nextSessionOrdinal(outputRoot));
+  const sessionId = ids.sessionId;
   const sessionDir = join(outputRoot, sessionId);
   // 0700 before a single byte is written: everything below this point is
   // unredacted (§37.2).
@@ -354,7 +354,6 @@ export async function scan(input: ScanCommandInput): Promise<void> {
             rateProfile,
             exportInput,
             network.model,
-            summarizeGaps(queue.skipped, excluded, queue.pending),
             assembled,
           );
         },
@@ -403,11 +402,19 @@ export async function scan(input: ScanCommandInput): Promise<void> {
     candidatesDiscovered: queue.visited.length + queue.pending,
     templatesSaturated: 0,
     instancesSkipped: 0,
-    workflows: 0,
-    apisObserved: network.model.observations.length,
-    apisUnobserved: 0,
+    // From the assembled model, not the raw request count. The summary used
+    // to report every request the browser made as an API — thirteen for a
+    // six-page fixture with three endpoints — and it disagreed with the
+    // surface file written beside it.
+    workflows: assembled?.workflows.candidates.length ?? 0,
+    apisObserved: assembled?.api.apis.length ?? 0,
+    apisUnobserved: assembled === undefined ? 0 : unreachedApiCount(assembled),
     origins: network.model.origins.length,
-    jsAssets: network.model.observations.filter((o) => o.resourceType === "Script").length,
+    jsAssets: new Set(
+      network.model.observations
+        .filter((o) => o.resourceType === "Script")
+        .map((o) => o.url.identity),
+    ).size,
     barriers: [],
     topGaps: summarizeGaps(queue.skipped, excluded, queue.pending),
     discoverySources: ["browser"],
@@ -597,7 +604,6 @@ async function writeArtifacts(
     readonly candidatesDiscovered: number;
   },
   model: NetworkModel,
-  gaps: readonly { readonly reason: string; readonly count: number }[],
   assembled: AssembledModel,
 ): Promise<readonly string[]> {
   const redactor = createRedactor();
@@ -631,12 +637,16 @@ async function writeArtifacts(
     {
       scan,
       origins,
-      apis,
-      workflows: [],
-      apiSequences: [],
-      javascript: [],
+      apis: withModelContext(apis, assembled),
+      // Everything V2 and V3 derive. These were empty arrays until the M3
+      // gate produced a sample report: the pipeline had been building
+      // workflows, sequences and a gap queue for two milestones and no
+      // artifact carried any of it.
+      workflows: exportedWorkflows(assembled),
+      apiSequences: assembled.sequences.sequences,
+      javascript: exportedJavascript(model),
       barriers: [],
-      coverageGaps: gaps,
+      coverageGaps: assembled.gaps,
       unreachedCandidateAssociations: [],
     },
     (chunk) => {
@@ -702,33 +712,58 @@ async function writeArtifacts(
         authState: "anonymous",
         aiMode: "off",
       },
-      coverage: [
-        {
-          dimension: "Pages",
-          observed: exportInput.pagesVisited,
-          discovered: exportInput.candidatesDiscovered,
-        },
-        { dimension: "APIs", observed: apis.length, discovered: apis.length },
-        { dimension: "Origins", observed: origins.length, discovered: origins.length },
-      ],
-      workflows: [],
-      apis: apis.map((api) => ({
+      score: { value: assembled.score.score, description: assembled.score.description },
+      coverage: coverageRows(assembled, exportInput),
+      // §21, §44. Registering a tool sends nothing, so this is the one part
+      // of the surface that never appears in traffic — and the report is
+      // where a person finds out the page hands agents a `deleteAccount`.
+      webmcpTools: assembled.webmcp.map((tool) => ({
+        name: tool.name,
+        ...(tool.endpoint === undefined ? {} : { endpoint: tool.endpoint }),
+        ...(tool.description === undefined ? {} : { description: tool.description }),
+      })),
+      workflows: reportWorkflows(assembled),
+      apis: assembled.api.apis.map((api) => ({
         method: api.method,
         url: api.url,
-        ...(api.observed.status === undefined ? {} : { status: api.observed.status }),
-        role: api.observed.resource_type ?? "unknown",
+        ...(api.statuses[0] === undefined ? {} : { status: api.statuses[0] }),
+        role: api.role,
       })),
       origins,
-      javascript: [],
-      barriers: [],
-      gaps: gaps.map((gap) => ({
-        reason: gap.reason,
-        count: gap.count,
-        remedy: REMEDIES[gap.reason] ?? "See the Target Policy and the scan budget.",
+      javascript: exportedJavascript(model).map((asset) => ({
+        url: asset.url,
+        ...(asset.bytes === undefined ? {} : { bytes: asset.bytes }),
+        firstParty: asset.first_party,
+        analysis: asset.analysis,
       })),
+      barriers: [],
+      // The typed queue, with §10C.7's own responses — not a second remedy
+      // table that can drift from it.
+      gaps: gapRows(assembled),
+      outputDir: sessionDir,
+      // Named relative to the session directory, which is where the report
+      // itself sits and is named just above. The absolute paths were
+      // correct and unreadable — three wrapped lines of temp directory to
+      // say `events-0001.jsonl`.
+      //
+      // The filenames are read from disk. `events.jsonl` was a guess, and
+      // the store writes numbered segments, so every report before this
+      // pointed at a file that does not exist.
       artifacts: [
-        { path: join(sessionDir, "events.jsonl"), contents: "raw observations" },
-        { path: jsonPath, contents: "derived model", records: apis.length },
+        ...readdirSync(sessionDir)
+          .filter((name) => name.startsWith("events-") && name.endsWith(".jsonl"))
+          .sort()
+          .map((name) => ({ path: name, contents: "raw observations" })),
+        {
+          path: basename(jsonPath),
+          contents: "derived model",
+          records: assembled.api.apis.length,
+        },
+        {
+          path: basename(surfacePath),
+          contents: "scanner-consumable surface",
+          records: assembled.surface.items.length,
+        },
       ],
     }),
     { mode: 0o600 },
@@ -737,11 +772,270 @@ async function writeArtifacts(
   return [reportPath, jsonPath, surfacePath];
 }
 
-/** §10C.7: a gap with no action is a number a user cannot move. */
-const REMEDIES: Readonly<Record<string, string>> = {
-  budget_exhausted: "Raise --max-pages or --timeout-minutes, or resume this session.",
-  out_of_scope: "Add the origin to --allowed-origins if it is in scope for you.",
-  policy_denied: "Check --excluded-paths and the network rules.",
-  robots_excluded: "robots.txt disallows these. Only scan them if you own the site.",
-  not_http: "Not an http(s) URL; nothing to scan.",
+/**
+ * §10C.7's queue, grouped for the report.
+ *
+ * The remedies come from `@browserrecon/coverage`, which owns the gap
+ * vocabulary. A second table here said roughly the same things about a
+ * different set of reasons, and only one of the two was ever updated.
+ */
+function gapRows(
+  assembled: AssembledModel,
+): readonly { reason: string; count: number; remedy: string }[] {
+  const counts = new Map<string, { count: number; remedy: string }>();
+  for (const gap of assembled.gaps) {
+    const existing = counts.get(gap.reason);
+    counts.set(gap.reason, {
+      count: (existing?.count ?? 0) + 1,
+      remedy:
+        gap.remedy ??
+        existing?.remedy ??
+        // §10C.7 says so for `not_navigable`: there is nothing to do, and
+        // inventing an action would be worse than saying so.
+        NOT_NAVIGABLE_NOTE,
+    });
+  }
+  return [...counts.entries()]
+    .map(([reason, entry]) => ({ reason, count: entry.count, remedy: entry.remedy }))
+    .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
+}
+
+/**
+ * The next free session number in an output directory.
+ *
+ * Every scan used to be `sess_0001`. A second scan into the same `--out`
+ * crashed on the event store's own guard — "already holds session sess_0001"
+ * — as an internal error with a stack trace, and the guard was right: two
+ * scans were about to share one log. Since the natural thing to do is point
+ * every run at the same directory, and the Gate A runbook says to, the
+ * second command anybody ran would have hit it.
+ *
+ * Highest existing plus one, rather than a count: a directory the user
+ * deleted must not hand its number to a different scan.
+ */
+function nextSessionOrdinal(outputRoot: string): number {
+  let highest = 0;
+  try {
+    for (const name of readdirSync(outputRoot)) {
+      const match = /^sess_(\d+)$/.exec(name);
+      if (match === null) continue;
+      highest = Math.max(highest, Number(match[1]));
+    }
+  } catch {
+    // No output directory yet, which is the first scan on this machine.
+  }
+  return highest + 1;
+}
+
+/** §10C.1's dimension names, as a reader would say them. */
+const DIMENSION_LABELS: Readonly<Record<string, string>> = {
+  url: "URLs",
+  route: "Routes",
+  js_asset: "JS assets",
+  js_bytes: "JS bytes",
+  first_party_js: "First-party JS",
+  runtime_api: "APIs (runtime)",
+  static_api_candidate: "API candidates (static)",
+  workflow: "Workflows",
+  api_sequence: "API sequences",
+  state_transition: "State transitions",
+  webmcp: "WebMCP tools",
+  origin: "Origins",
+  access_barrier: "Access barriers",
 };
+
+/**
+ * The coverage table — §10C.1's dimensions, not three hand-picked counts.
+ *
+ * The three that used to be here (Pages, APIs, Origins) were assembled at
+ * this call site and every one of them showed 100%, beside a score of 0.60
+ * the reader had no way to reconcile with them. The score is computed from
+ * the dimensions, so the dimensions are what the table has to show.
+ *
+ * A dimension that found nothing is left out rather than printed as zero:
+ * §10C.2 keeps "we did not look" and "we looked and it was not there" apart,
+ * and a row of zeros reads as the second.
+ */
+function coverageRows(
+  assembled: AssembledModel,
+  exportInput: { readonly pagesVisited: number; readonly candidatesDiscovered: number },
+): readonly { dimension: string; observed: number; discovered: number }[] {
+  const rows = [
+    // Pages is not a §10C dimension — it is the budget the user set, and
+    // the first thing they look for.
+    {
+      dimension: "Pages",
+      observed: exportInput.pagesVisited,
+      discovered: exportInput.candidatesDiscovered,
+    },
+  ];
+
+  for (const dimension of assembled.coverage.dimensions) {
+    if (dimension.total === 0) continue;
+    const reached =
+      dimension.byStatus.observed + dimension.byStatus.analyzed + dimension.byStatus.correlated;
+    rows.push({
+      dimension: DIMENSION_LABELS[dimension.dimension] ?? dimension.dimension,
+      observed: reached,
+      discovered: dimension.total,
+    });
+  }
+  return rows;
+}
+
+/** Static candidates the scan never reached, for the coverage denominator. */
+function unreachedApiCount(assembled: AssembledModel): number {
+  return (
+    assembled.coverage.dimensions.find(
+      (dimension) => dimension.dimension === "static_api_candidate",
+    )?.total ?? 0
+  );
+}
+
+/** Workflow candidates as §35B.3's steps. */
+function reportWorkflows(assembled: AssembledModel): readonly WorkflowReport[] {
+  return assembled.workflows.candidates.map((candidate) => ({
+    id: candidate.workflow_id,
+    // Naming is §18.2's job and needs V4. Until then the routes are the
+    // honest name: a label this layer invented would read like a finding.
+    name: candidate.routes[0] ?? candidate.workflow_id,
+    confidence: candidate.confidence,
+    steps: candidate.events.map((event, index) => ({
+      step: index + 1,
+      kind: "request" as const,
+      detail: `${event.routeTemplate} (${event.apiId})`,
+      ...(event.dependsOn.length === 0 ? {} : { causedBy: event.dependsOn }),
+    })),
+  }));
+}
+
+/** Scripts the browser fetched, for §35B.2's JavaScript section. */
+function exportedJavascript(model: NetworkModel): readonly {
+  url: string;
+  bytes?: number | undefined;
+  first_party: boolean;
+  analysis: string;
+}[] {
+  const seen = new Set<string>();
+  const assets: {
+    url: string;
+    bytes?: number | undefined;
+    first_party: boolean;
+    analysis: string;
+  }[] = [];
+
+  for (const observation of model.observations) {
+    if (observation.resourceType !== "Script") continue;
+    const url = observation.url.identity;
+    if (seen.has(url)) continue;
+    seen.add(url);
+    assets.push({
+      url,
+      ...(observation.responseBytes === undefined ? {} : { bytes: observation.responseBytes }),
+      first_party: model.origins.some(
+        (group) => group.origin === originOf(url) && group.requests > 0,
+      ),
+      // Static analysis runs on demand rather than in the scan loop, so the
+      // honest answer here is what was collected, not what was parsed.
+      analysis: observation.bodyCaptured === true ? "body captured" : "not analysed",
+    });
+  }
+  return assets.sort((a, b) => a.url.localeCompare(b.url));
+}
+
+/** Workflow candidates in the published document's shape. */
+function exportedWorkflows(assembled: AssembledModel): readonly unknown[] {
+  return assembled.workflows.candidates.map((candidate) => ({
+    workflow_id: candidate.workflow_id,
+    confidence: candidate.confidence,
+    low_confidence: candidate.lowConfidence,
+    auth_context: candidate.authContext,
+    routes: candidate.routes,
+    interactions: candidate.interactions,
+    evidence: candidate.evidence,
+    ...(candidate.startedBy === undefined ? {} : { started_by: candidate.startedBy }),
+    ...(candidate.endedBy === undefined ? {} : { ended_by: candidate.endedBy }),
+    ...(candidate.truncatedBy === undefined ? {} : { truncated_by: candidate.truncatedBy }),
+    provenance: "derived",
+  }));
+}
+
+/**
+ * Attach what the model knows to the observations the document exports.
+ *
+ * The document is observation-level by design — one entry per request the
+ * browser made, which is what makes it a record rather than an
+ * interpretation. What it was missing is the interpretation *alongside* it:
+ * which of those requests the classifier called an application API, which
+ * workflow it belongs to, and what it depends on.
+ */
+function withModelContext(
+  apis: readonly ExportedApi[],
+  assembled: AssembledModel,
+): readonly ExportedApi[] {
+  const byIdentity = new Map<string, (typeof assembled.api.apis)[number]>();
+  for (const entry of assembled.api.apis) {
+    for (const observation of entry.observations) {
+      byIdentity.set(`${entry.method} ${observation.url}`, entry);
+    }
+  }
+
+  // §17A.1 classifies and never drops, so every request has a verdict — not
+  // only the ones the model kept. Read from the model rather than
+  // re-classified here: a second opinion built from different inputs is how
+  // one file comes to disagree with itself.
+  const roleOf = new Map(
+    assembled.api.classified.map((entry) => [`${entry.method} ${entry.identity}`, entry.role]),
+  );
+
+  const surfaceByApi = new Map(
+    assembled.surface.items
+      .filter((item) => item.api_id !== undefined)
+      .map((item) => [item.api_id as string, item]),
+  );
+
+  return apis.map((api): ExportedApi => {
+    const key = `${api.method} ${api.url}`;
+    const role = roleOf.get(key);
+    const entry = byIdentity.get(key);
+    if (entry === undefined) return role === undefined ? api : { ...api, role };
+    const surface = surfaceByApi.get(entry.api_id);
+    const first = entry.observations[0];
+
+    return {
+      ...api,
+      role: entry.role,
+      ...(surface?.workflow_id === undefined && first?.interactionId === undefined
+        ? {}
+        : {
+            context: {
+              ...(api.context ?? {}),
+              ...(surface?.workflow_id === undefined
+                ? {}
+                : { workflow_id: surface.workflow_id, workflow_step: surface.workflow_step }),
+              ...(first?.interactionId === undefined
+                ? {}
+                : { interaction_id: first.interactionId }),
+              ...(first?.navigationId === undefined
+                ? {}
+                : { navigation_id: first.navigationId }),
+            },
+          }),
+      ...(entry.depends_on.length === 0
+        ? {}
+        : { depends_on: entry.depends_on.map((edge) => edge.target) }),
+      ...(entry.caused_by.length === 0
+        ? {}
+        : { caused_by: entry.caused_by.map((edge) => edge.target) }),
+    };
+  });
+}
+
+/** The origin of a URL, or the URL itself when it will not parse. */
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return url;
+  }
+}

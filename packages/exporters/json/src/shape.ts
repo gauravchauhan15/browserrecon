@@ -16,6 +16,8 @@
  */
 
 /** Bumped when the exported shape changes. Independent of the event schema. */
+import { COVERAGE_CAVEAT as COVERAGE_CAVEAT_TEXT } from "@browserrecon/coverage";
+
 export const EXPORT_SCHEMA_VERSION = "1.0.0";
 
 export interface ExportedApi {
@@ -43,6 +45,16 @@ export interface ExportedApi {
         readonly line?: number | undefined;
       }
     | undefined;
+  /**
+   * §17A's verdict for this request.
+   *
+   * Present because the document is observation-level: it records every
+   * request the browser made, including page loads, scripts and images, and
+   * without the role a consumer has to re-derive which of them are
+   * application APIs — which is how two tools reading one file come to
+   * disagree about the size of an application.
+   */
+  readonly role?: string | undefined;
   readonly caused_by?: readonly string[] | undefined;
   readonly depends_on?: readonly string[] | undefined;
   /**
@@ -95,10 +107,15 @@ export interface ExportedDocument {
   readonly unreached_candidate_associations: readonly unknown[];
 }
 
-/** The caveat §10C.6 requires on every export. */
-export const COVERAGE_CAVEAT =
-  "Coverage is scoped by the Target Policy, the authentication state and the scan " +
-  "budget. This is what was reachable and observed, not everything that exists.";
+/**
+ * The caveat §10C.6 requires on every export — the coverage package's.
+ *
+ * It used to be its own sentence here. That made three wordings of one
+ * promise in three packages, and a single report can print two of them, which
+ * reads as the tool hedging twice about different things. One constant, in
+ * the module that owns the score it qualifies.
+ */
+export const COVERAGE_CAVEAT = COVERAGE_CAVEAT_TEXT;
 
 /**
  * The keys §23.1 requires, present or empty.

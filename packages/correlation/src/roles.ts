@@ -195,6 +195,14 @@ function isFirstParty(url: string, origins: readonly string[]): boolean {
 }
 
 /**
+ * The shortest gap that can be a poll rather than a burst.
+ *
+ * One second. Real heartbeats are seconds to minutes apart; nothing polls at
+ * 50 Hz, and everything a page loads at once arrives faster than this.
+ */
+const MINIMUM_POLL_INTERVAL_MS = 1_000;
+
+/**
  * Whether a request looks like a heartbeat.
  *
  * Structural, not by domain: the same method and path, repeating at a stable
@@ -206,6 +214,14 @@ function looksLikePolling(observation: ObservationForRole): boolean {
   const { repeatCount, repeatIntervalMs, repeatJitter } = observation;
   if (repeatCount === undefined || repeatCount < 3) return false;
   if (repeatIntervalMs === undefined) return false;
+  // A heartbeat has a period. Requests milliseconds apart are a page load
+  // firing everything at once, and at that scale relative jitter is
+  // meaningless — two gaps of 2ms and 3ms score 0.2, well inside the
+  // tolerance below. The M1 gate caught it: three scans of one fixture
+  // disagreed about whether an endpoint was a heartbeat, because the answer
+  // depended on scheduler noise. §36.2 requires that answer be stable, and a
+  // verdict that flips on milliseconds is not a verdict.
+  if (repeatIntervalMs < MINIMUM_POLL_INTERVAL_MS) return false;
   // A human clicking repeatedly produces wildly uneven gaps; a timer does
   // not. Twenty-five per cent is loose enough for network variance and
   // tight enough to exclude a person.
@@ -258,13 +274,6 @@ export function classifyTraffic(observation: ObservationForRole): RoleVerdict {
     return { role: "auth_infrastructure", signal: "path matches an authentication endpoint" };
   }
 
-  if (looksLikePolling(observation)) {
-    return {
-      role: "polling_heartbeat",
-      signal: `repeated ${observation.repeatCount} times at a stable interval with no interaction`,
-    };
-  }
-
   if (ASSET_TYPES.test(observation.mimeType ?? "")) {
     return firstParty
       ? { role: "application_asset", signal: `first-party ${observation.mimeType}` }
@@ -286,6 +295,20 @@ export function classifyTraffic(observation: ObservationForRole): RoleVerdict {
           role: "third_party_widget",
           signal: "third-party browser resource from a host not on any list",
         };
+  }
+
+  // After the asset checks, not before them. A stylesheet fetched once per
+  // page repeats at roughly the interval between page visits, with the
+  // evenness of a crawler — so on a four-page fixture the same bundle came
+  // back `polling_heartbeat` on some runs and `application_asset` on others,
+  // and §36.2's three-identical-runs gate caught it. A repeated asset is a
+  // repeated asset whatever its rhythm; only something carrying an
+  // application payload can be a heartbeat.
+  if (looksLikePolling(observation)) {
+    return {
+      role: "polling_heartbeat",
+      signal: `repeated ${observation.repeatCount} times at a stable interval with no interaction`,
+    };
   }
 
   if (firstParty) {

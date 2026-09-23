@@ -245,10 +245,10 @@ run it end to end on data it did not construct.
 ### Narrowing a rule once is not enough (BR-M3-12)
 
 §18.1 says to merge adjacent workflow segments that "share an initiator
-chain". Read as the same script *file*, that merges every segment of a
+chain". Read as the same script _file_, that merges every segment of a
 single-bundle application into one candidate — §18.1's own "one giant SPA
 workflow" failure mode, produced by the step meant to prevent it. The rule was
-narrowed to the top *frame*.
+narrowed to the top _frame_.
 
 It shares a top frame too, as soon as it has an `api.get()` wrapper. That is
 most applications. The same failure returned one level down, and the M3 gate

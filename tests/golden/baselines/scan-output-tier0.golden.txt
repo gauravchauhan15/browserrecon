@@ -43,8 +43,10 @@
 
       browserrecon resume sess_0001
 
-  Coverage is scoped by policy, authentication and budget. This is what was
-  reachable and observed, not everything that exists.
+  High-confidence coverage of the reachable and analyzable application surface
+  under the supplied target policy, authentication state, runtime session,
+  exploration budget and analysis limits. This is not a claim of complete
+  application coverage, and cannot be.
 ────────────────────────────────────────────────────────────────────────────────
 ===== terminal summary (--json) =====
 {
@@ -112,9 +114,7 @@
 | Auth state | anonymous |
 | AI mode | off |
 
-> Coverage below is scoped by the Target Policy, the authentication state and
-> the scan budget. It describes what was reachable and observed — not
-> everything that exists.
+> High-confidence coverage of the reachable and analyzable application surface under the supplied target policy, authentication state, runtime session, exploration budget and analysis limits. This is not a claim of complete application coverage, and cannot be.
 
 ## 1. Coverage summary
 
@@ -123,6 +123,8 @@
 | Pages | 24 | 61 | 39% |
 | APIs | 18 | 25 | 72% |
 | Origins | 5 | 5 | 100% |
+
+_Ratio is of what this scan discovered, never of what the application has._
 
 ## 2. Workflows
 
@@ -152,21 +154,29 @@
 | POST | `https://shop.example.com/api/cart` | 201 | consumer |
 | GET | `https://shop.example.com/api/session` | 401 | auth |
 
-## 4. Origins
+## 4. WebMCP tools
+
+| Tool | Endpoint | Description |
+| --- | --- | --- |
+| `searchProducts` | `/api/products/search` | Search the catalog by keyword. |
+
+_Tools are reported, never invoked (§7.2)._
+
+## 5. Origins
 
 | Origin | Requests | Classification |
 | --- | --- | --- |
 | `https://shop.example.com` | 84 | first_party |
 | `https://cdn.example.net` | 12 | third_party_cdn |
 
-## 5. JavaScript
+## 6. JavaScript
 
 | Script | Size | Party | Analysis |
 | --- | --- | --- | --- |
 | `https://shop.example.com/app.js` | 47 KB | first | 3 endpoints |
 | `(inline)` | — | first | inline bootstrap |
 
-## 6. Access barriers
+## 7. Access barriers
 
 | Category | URL | Evidence |
 | --- | --- | --- |
@@ -174,14 +184,14 @@
 
 _No barrier was bypassed. Barriers are recorded, never circumvented._
 
-## 7. Coverage gaps
+## 8. Coverage gaps
 
 | Reason | Count | Remedy |
 | --- | --- | --- |
 | auth_required | 14 | Configure an auth profile and re-run. |
 | excluded_by_policy | 9 | Widen --allowed-paths if intended. |
 
-## 8. Artifacts
+## 9. Artifacts
 
 | File | Contents | Records |
 | --- | --- | --- |

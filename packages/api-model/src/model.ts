@@ -89,6 +89,21 @@ export interface ApiModel {
   readonly apis: readonly ApiObject[];
   /** Requests excluded as non-application traffic, counted by role. */
   readonly excluded: readonly { readonly role: TrafficRole; readonly count: number }[];
+  /**
+   * Every endpoint's verdict, kept or not — §17A.1's "classify, never drop".
+   *
+   * The model exports what it kept; an exporter that wants to publish the
+   * whole record needs to say what each request *was*, and re-running the
+   * classifier at the call site would give a second opinion built from
+   * different inputs. One verdict, computed once, available to both.
+   */
+  readonly classified: readonly {
+    readonly method: string;
+    /** The normalized identity, which is what a consumer can match on. */
+    readonly identity: string;
+    readonly role: TrafficRole;
+    readonly signal: string;
+  }[];
   /** Requests seen but never answered when the scan ended. */
   readonly unanswered: number;
 }
@@ -267,6 +282,11 @@ export function buildApiModel(
   const pending = new Map<string, Pending>();
   const buckets = new Map<string, Bucket>();
   const excluded = new Map<TrafficRole, number>();
+  /** Every endpoint's verdict, by identity key, in first-seen order. */
+  const classified = new Map<
+    string,
+    { method: string; identity: string; role: TrafficRole; signal: string }
+  >();
   // Ordered by first appearance, so api_0001 is the first endpoint the scan
   // met rather than whichever sorts first.
   const order: string[] = [];
@@ -354,6 +374,15 @@ export function buildApiModel(
       ...(repeat?.intervalMs === undefined ? {} : { repeatIntervalMs: repeat.intervalMs }),
       ...(repeat?.jitter === undefined ? {} : { repeatJitter: repeat.jitter }),
     });
+
+    if (!classified.has(identityKey)) {
+      classified.set(identityKey, {
+        method: request.payload.method,
+        identity: request.url.identity,
+        role: verdict.role,
+        signal: verdict.signal,
+      });
+    }
 
     if (!keep.has(verdict.role)) {
       excluded.set(verdict.role, (excluded.get(verdict.role) ?? 0) + 1);
@@ -483,6 +512,9 @@ export function buildApiModel(
 
   return {
     apis,
+    classified: [...classified.values()].sort(
+      (a, b) => a.method.localeCompare(b.method) || a.identity.localeCompare(b.identity),
+    ),
     excluded: [...excluded.entries()]
       .map(([role, count]) => ({ role, count }))
       .sort((a, b) => b.count - a.count || a.role.localeCompare(b.role)),

@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "session_id": "sess_0001",
+  "target": "http://127.0.0.1:8080",
+  "items": [
+    {
+      "surface_id": "srf_0001",
+      "kind": "api_endpoint",
+      "identity": "GET http://127.0.0.1:8080/api/products/search",
+      "provenance": "observed",
+      "api_id": "api_0001",
+      "interaction_id": "int_0001",
+      "navigation_id": "nav_0001",
+      "auth_context": "anonymous",
+      "source_event_ids": ["evt_000041", "evt_000043"]
+    },
+    {
+      "surface_id": "srf_0002",
+      "kind": "origin",
+      "identity": "http://127.0.0.1:8080",
+      "provenance": "observed",
+      "auth_context": "anonymous",
+      "source_event_ids": ["evt_000041", "evt_000043"]
+    },
+    {
+      "surface_id": "srf_0003",
+      "kind": "webmcp_tool",
+      "identity": "addToCart -> /api/cart/items",
+      "provenance": "observed",
+      "auth_context": "anonymous",
+      "source_event_ids": ["evt_000024"]
+    },
+    {
+      "surface_id": "srf_0004",
+      "kind": "webmcp_tool",
+      "identity": "deleteAccount -> /api/account",
+      "provenance": "observed",
+      "auth_context": "anonymous",
+      "source_event_ids": ["evt_000025"]
+    },
+    {
+      "surface_id": "srf_0005",
+      "kind": "webmcp_tool",
+      "identity": "searchProducts -> /api/products/search",
+      "provenance": "observed",
+      "auth_context": "anonymous",
+      "source_event_ids": ["evt_000023"]
+    }
+  ],
+  "coverage_caveat": "High-confidence coverage of the reachable and analyzable application surface under the supplied target policy, authentication state, runtime session, exploration budget and analysis limits. This is not a claim of complete application coverage, and cannot be."
+}

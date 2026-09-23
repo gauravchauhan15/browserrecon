@@ -1,5 +1,6 @@
 import { UNREDACTED_OUTPUT_WARNING } from "@browserrecon/core";
 import { describe, expect, it } from "vitest";
+import { COVERAGE_CAVEAT } from "@browserrecon/coverage";
 import {
   TERMINAL_WIDTH,
   formatSummary,
@@ -92,18 +93,32 @@ describe("what the summary answers", () => {
 });
 
 describe("what it refuses to claim", () => {
+  /**
+   * The caveat is wrapped to the terminal width, so it is never one line.
+   * Asserting on the rendered text directly tests the wrapper; collapsing
+   * whitespace first tests the sentence, which is the thing §10C.6 is about.
+   */
+  const unwrapped = (text: string): string => text.replace(/\s+/g, " ");
+
+  it("prints the coverage package's caveat, not a paraphrase of it", () => {
+    // One promise, worded once. A user reads the terminal and then opens
+    // report.md; meeting two sentences there makes "do these mean different
+    // things?" a question they have to answer themselves.
+    expect(unwrapped(renderSummary(summary()))).toContain(unwrapped(COVERAGE_CAVEAT));
+  });
+
   it("never claims complete coverage", () => {
     // §10C.6. This holds even for a scan that finished cleanly, which is
     // exactly the case where the claim is tempting.
-    const text = renderSummary(summary({ completeness: "complete" }));
-    expect(text).toMatch(/not everything that exists/i);
-    expect(text).not.toMatch(/full coverage|complete coverage|all endpoints/i);
+    const text = unwrapped(renderSummary(summary({ completeness: "complete" })));
+    expect(text).toMatch(/not a claim of complete application coverage/i);
+    expect(text).not.toMatch(/full coverage|all endpoints/i);
   });
 
   it("puts the caveat last, where it is read", () => {
-    const text = renderSummary(summary());
-    expect(text.indexOf("not everything that exists")).toBeGreaterThan(
-      text.indexOf("Artifacts"),
+    const text = unwrapped(renderSummary(summary()));
+    expect(unwrapped(text).indexOf("not a claim of complete")).toBeGreaterThan(
+      unwrapped(text).indexOf("Artifacts"),
     );
   });
 

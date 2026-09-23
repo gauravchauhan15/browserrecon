@@ -1,0 +1,410 @@
+{
+  "schema_version": "1.0.0",
+  "scan": {
+    "session_id": "sess_0001",
+    "target": "http://127.0.0.1:8080",
+    "started_at": "2026-09-23T13:38:13.254Z",
+    "finished_at": "2026-09-23T13:38:23.673Z",
+    "completeness": "complete",
+    "rate_profile": "normal",
+    "discovery_sources": ["browser"],
+    "ai_mode": "off",
+    "coverage_caveat": "High-confidence coverage of the reachable and analyzable application surface under the supplied target policy, authentication state, runtime session, exploration budget and analysis limits. This is not a claim of complete application coverage, and cannot be."
+  },
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:8080",
+      "requests": 13,
+      "classification": "first_party"
+    }
+  ],
+  "apis": [
+    {
+      "api_id": "api_0001",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/",
+      "observed": {
+        "status": 200,
+        "content_type": "text/html",
+        "resource_type": "Document"
+      },
+      "initiator": {
+        "type": "other"
+      },
+      "source_event_ids": ["evt_000009"],
+      "provenance": "observed",
+      "role": "application_asset"
+    },
+    {
+      "api_id": "api_0002",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/about",
+      "observed": {
+        "status": 200,
+        "content_type": "text/html",
+        "resource_type": "Document"
+      },
+      "initiator": {
+        "type": "other"
+      },
+      "source_event_ids": ["evt_000064"],
+      "provenance": "observed",
+      "role": "application_asset"
+    },
+    {
+      "api_id": "api_0003",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/api/orders/archive",
+      "observed": {
+        "status": 200,
+        "content_type": "application/json",
+        "resource_type": "Fetch"
+      },
+      "initiator": {
+        "type": "script"
+      },
+      "source_event_ids": ["evt_000045"],
+      "provenance": "observed",
+      "role": "application_api",
+      "context": {
+        "workflow_id": "wf_0001",
+        "workflow_step": 2,
+        "interaction_id": "int_0001",
+        "navigation_id": "nav_0001"
+      },
+      "caused_by": ["interaction:int_0001", "script:http://127.0.0.1:8080/chunk-orders.js"]
+    },
+    {
+      "api_id": "api_0004",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/api/orders/pending",
+      "observed": {
+        "status": 200,
+        "content_type": "application/json",
+        "resource_type": "Fetch"
+      },
+      "initiator": {
+        "type": "script"
+      },
+      "source_event_ids": ["evt_000044"],
+      "provenance": "observed",
+      "role": "application_api",
+      "context": {
+        "workflow_id": "wf_0001",
+        "workflow_step": 1,
+        "interaction_id": "int_0001",
+        "navigation_id": "nav_0001"
+      },
+      "caused_by": [
+        "interaction:int_0001",
+        "script:http://127.0.0.1:8080/app.js",
+        "script:http://127.0.0.1:8080/chunk-orders.js"
+      ]
+    },
+    {
+      "api_id": "api_0005",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/api/rows?page=1",
+      "observed": {
+        "status": 200,
+        "content_type": "application/json",
+        "resource_type": "Fetch"
+      },
+      "initiator": {
+        "type": "script"
+      },
+      "source_event_ids": ["evt_000059"],
+      "provenance": "observed",
+      "role": "application_api",
+      "context": {
+        "interaction_id": "int_0002",
+        "navigation_id": "nav_0001"
+      },
+      "caused_by": ["interaction:int_0002", "script:http://127.0.0.1:8080/app.js"]
+    },
+    {
+      "api_id": "api_0006",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/app.js",
+      "observed": {
+        "status": 200,
+        "content_type": "text/javascript",
+        "resource_type": "Script"
+      },
+      "initiator": {
+        "type": "parser",
+        "source": "http://127.0.0.1:8080/"
+      },
+      "source_event_ids": ["evt_000012"],
+      "provenance": "observed",
+      "role": "application_asset"
+    },
+    {
+      "api_id": "api_0007",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/audit",
+      "observed": {
+        "status": 200,
+        "content_type": "text/html",
+        "resource_type": "Document"
+      },
+      "initiator": {
+        "type": "other"
+      },
+      "source_event_ids": ["evt_000076"],
+      "provenance": "observed",
+      "role": "application_asset"
+    },
+    {
+      "api_id": "api_0008",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/billing",
+      "observed": {
+        "status": 200,
+        "content_type": "text/html",
+        "resource_type": "Document"
+      },
+      "initiator": {
+        "type": "other"
+      },
+      "source_event_ids": ["evt_000088"],
+      "provenance": "observed",
+      "role": "application_asset"
+    },
+    {
+      "api_id": "api_0009",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/chunk-orders.js",
+      "observed": {
+        "status": 200,
+        "content_type": "text/javascript",
+        "resource_type": "Script"
+      },
+      "initiator": {
+        "type": "script"
+      },
+      "source_event_ids": ["evt_000040"],
+      "provenance": "observed",
+      "role": "application_asset"
+    },
+    {
+      "api_id": "api_0010",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/favicon.ico",
+      "observed": {
+        "status": 404,
+        "content_type": "text/plain",
+        "resource_type": "Other"
+      },
+      "initiator": {
+        "type": "other"
+      },
+      "source_event_ids": ["evt_000022"],
+      "provenance": "observed",
+      "role": "application_asset"
+    },
+    {
+      "api_id": "api_0011",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/help",
+      "observed": {
+        "status": 200,
+        "content_type": "text/html",
+        "resource_type": "Document"
+      },
+      "initiator": {
+        "type": "other"
+      },
+      "source_event_ids": ["evt_000100"],
+      "provenance": "observed",
+      "role": "application_asset"
+    },
+    {
+      "api_id": "api_0012",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/settings",
+      "observed": {
+        "status": 200,
+        "content_type": "text/html",
+        "resource_type": "Document"
+      },
+      "initiator": {
+        "type": "other"
+      },
+      "source_event_ids": ["evt_000112"],
+      "provenance": "observed",
+      "role": "application_asset"
+    },
+    {
+      "api_id": "api_0013",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/team",
+      "observed": {
+        "status": 200,
+        "content_type": "text/html",
+        "resource_type": "Document"
+      },
+      "initiator": {
+        "type": "other"
+      },
+      "source_event_ids": ["evt_000124"],
+      "provenance": "observed",
+      "role": "application_asset"
+    }
+  ],
+  "workflows": [
+    {
+      "workflow_id": "wf_0001",
+      "confidence": 0.3,
+      "low_confidence": true,
+      "auth_context": "anonymous",
+      "routes": ["/api/orders/pending", "/api/orders/archive"],
+      "interactions": ["int_0001"],
+      "evidence": [
+        {
+          "factor": "a user interaction is attributable to it",
+          "weight": 0.3
+        }
+      ],
+      "ended_by": {
+        "kind": "first_seen_route",
+        "strength": "medium",
+        "sequence": 59,
+        "detail": "first request to /api/rows"
+      },
+      "provenance": "derived"
+    }
+  ],
+  "api_sequences": [
+    {
+      "sequence_id": "seq_0001",
+      "page": "http://127.0.0.1:8080/",
+      "navigationId": "nav_0001",
+      "authContext": "anonymous",
+      "positions": [
+        {
+          "step": 1,
+          "api_id": "api_0001",
+          "method": "GET",
+          "url": "http://127.0.0.1:8080/api/orders/pending",
+          "sequence": 44,
+          "eventId": "evt_000044",
+          "status": 200,
+          "previous": [],
+          "next": ["api_0002"],
+          "initiator": {
+            "type": "script",
+            "script": "http://127.0.0.1:8080/chunk-orders.js"
+          },
+          "caused_by": [
+            {
+              "target": "interaction:int_0001",
+              "kind": "direct",
+              "basis": "the request was made while this interaction was the most recent one"
+            },
+            {
+              "target": "script:http://127.0.0.1:8080/app.js",
+              "kind": "direct",
+              "basis": "named by Chrome as the request's initiator"
+            },
+            {
+              "target": "script:http://127.0.0.1:8080/chunk-orders.js",
+              "kind": "direct",
+              "basis": "named by Chrome as the request's initiator"
+            }
+          ],
+          "depends_on": [],
+          "page": "http://127.0.0.1:8080/",
+          "navigationId": "nav_0001",
+          "interactionId": "int_0001",
+          "authContext": "anonymous",
+          "parallel_with": ["api_0002"]
+        },
+        {
+          "step": 2,
+          "api_id": "api_0002",
+          "method": "GET",
+          "url": "http://127.0.0.1:8080/api/orders/archive",
+          "sequence": 45,
+          "eventId": "evt_000045",
+          "status": 200,
+          "previous": ["api_0001"],
+          "next": ["api_0003"],
+          "initiator": {
+            "type": "script",
+            "script": "http://127.0.0.1:8080/chunk-orders.js"
+          },
+          "caused_by": [
+            {
+              "target": "interaction:int_0001",
+              "kind": "direct",
+              "basis": "the request was made while this interaction was the most recent one"
+            },
+            {
+              "target": "script:http://127.0.0.1:8080/chunk-orders.js",
+              "kind": "direct",
+              "basis": "named by Chrome as the request's initiator"
+            }
+          ],
+          "depends_on": [],
+          "page": "http://127.0.0.1:8080/",
+          "navigationId": "nav_0001",
+          "interactionId": "int_0001",
+          "authContext": "anonymous",
+          "parallel_with": ["api_0001"]
+        },
+        {
+          "step": 3,
+          "api_id": "api_0003",
+          "method": "GET",
+          "url": "http://127.0.0.1:8080/api/rows",
+          "sequence": 59,
+          "eventId": "evt_000059",
+          "status": 200,
+          "previous": ["api_0002"],
+          "next": [],
+          "initiator": {
+            "type": "script",
+            "script": "http://127.0.0.1:8080/app.js"
+          },
+          "caused_by": [
+            {
+              "target": "interaction:int_0002",
+              "kind": "direct",
+              "basis": "the request was made while this interaction was the most recent one"
+            },
+            {
+              "target": "script:http://127.0.0.1:8080/app.js",
+              "kind": "direct",
+              "basis": "named by Chrome as the request's initiator"
+            }
+          ],
+          "depends_on": [],
+          "page": "http://127.0.0.1:8080/",
+          "navigationId": "nav_0001",
+          "interactionId": "int_0002",
+          "authContext": "anonymous",
+          "parallel_with": []
+        }
+      ],
+      "distinctApis": 3
+    }
+  ],
+  "javascript": [
+    {
+      "url": "http://127.0.0.1:8080/app.js",
+      "bytes": 1037,
+      "first_party": true,
+      "analysis": "body captured"
+    },
+    {
+      "url": "http://127.0.0.1:8080/chunk-orders.js",
+      "bytes": 241,
+      "first_party": true,
+      "analysis": "body captured"
+    }
+  ],
+  "barriers": [],
+  "coverage_gaps": [],
+  "unreached_candidate_associations": []
+}

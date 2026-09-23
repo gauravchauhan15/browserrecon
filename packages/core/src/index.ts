@@ -29,6 +29,7 @@ export {
   OUTPUT_BOUNDARIES,
   OUTPUT_DIR_MODE,
   UNREDACTED_OUTPUT_WARNING,
+  unredactedOutputWarning,
   createSecureOutputDir,
   mayOptOut,
   requiresRedaction,

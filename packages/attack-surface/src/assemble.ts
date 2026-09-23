@@ -70,6 +70,8 @@ export interface AssembledModel {
   readonly coverage: CoverageReport;
   readonly score: CoverageScore;
   readonly gaps: readonly CoverageGap[];
+  /** §21: what the page publishes to agents. Invisible to traffic analysis. */
+  readonly webmcp: readonly WebMcpToolFound[];
   readonly surface: AttackSurface;
 }
 
@@ -81,19 +83,18 @@ interface WebMcpToolPayload {
   readonly url?: string;
 }
 
-/** Tools the page registered, read straight from the log. */
-function webMcpTools(events: readonly EventEnvelope[]): readonly {
+/** One tool the page published to any agent that visits. */
+export interface WebMcpToolFound {
   readonly name: string;
+  readonly description?: string | undefined;
   readonly endpoint?: string | undefined;
   readonly eventId: string;
   readonly authContext: string;
-}[] {
-  const found: {
-    name: string;
-    endpoint?: string | undefined;
-    eventId: string;
-    authContext: string;
-  }[] = [];
+}
+
+/** Tools the page registered, read straight from the log. */
+function webMcpTools(events: readonly EventEnvelope[]): readonly WebMcpToolFound[] {
+  const found: WebMcpToolFound[] = [];
   const seen = new Set<string>();
 
   for (const envelope of events) {
@@ -104,12 +105,94 @@ function webMcpTools(events: readonly EventEnvelope[]): readonly {
     seen.add(name);
     found.push({
       name,
+      ...(payload.description === undefined ? {} : { description: payload.description }),
       ...(payload.endpoint === undefined ? {} : { endpoint: payload.endpoint }),
       eventId: envelope.event_id,
       authContext: envelope.auth_context,
     });
   }
   return found;
+}
+
+interface ScriptAsset {
+  readonly url: string;
+  readonly firstParty: boolean;
+  /** A captured body is what static analysis has to work from. */
+  readonly bodyCaptured: boolean;
+}
+
+/**
+ * Scripts the browser fetched, and routes it committed to.
+ *
+ * Read from the log rather than passed in, so the coverage denominator is
+ * the same log everything else is derived from. Both dimensions existed in
+ * §10C.1 and were never populated: a scan that fetched and captured two
+ * bundles reported `js_asset 0`, `first_party_js 0` and `route 0` while its
+ * own report listed the scripts and the pages in the sections below — and
+ * the score docked 0.2 for JavaScript it had, in fact, collected.
+ */
+function pageContext(
+  events: readonly EventEnvelope[],
+  firstPartyOrigins: readonly string[],
+): { readonly scripts: readonly ScriptAsset[]; readonly routes: readonly string[] } {
+  const scripts = new Map<string, ScriptAsset>();
+  const routes = new Set<string>();
+  const pending = new Map<string, { url: string; script: boolean }>();
+
+  const routeOf = (raw: string): string | undefined => {
+    try {
+      const url = new URL(raw);
+      return `${url.origin}${url.pathname}`;
+    } catch {
+      return undefined;
+    }
+  };
+
+  for (const envelope of events) {
+    if (envelope.type === "navigation_committed" || envelope.type === "page_loaded") {
+      const route = routeOf((envelope.payload as { url?: string }).url ?? "");
+      if (route !== undefined) routes.add(route);
+      continue;
+    }
+
+    if (envelope.type === "network_request") {
+      const payload = envelope.payload as {
+        requestId?: string;
+        url?: string;
+        resourceType?: string;
+      };
+      if (payload.requestId === undefined || payload.url === undefined) continue;
+      pending.set(payload.requestId, {
+        url: payload.url,
+        script: payload.resourceType?.toLowerCase() === "script",
+      });
+      continue;
+    }
+
+    if (envelope.type !== "network_response") continue;
+    const payload = envelope.payload as {
+      requestId?: string;
+      body?: { text?: string };
+    };
+    const request =
+      payload.requestId === undefined ? undefined : pending.get(payload.requestId);
+    if (request === undefined || !request.script) continue;
+    pending.delete(payload.requestId as string);
+
+    const identity = routeOf(request.url) ?? request.url;
+    const captured = payload.body?.text !== undefined;
+    const existing = scripts.get(identity);
+    scripts.set(identity, {
+      url: identity,
+      firstParty: firstPartyOrigins.some((origin) => identity.startsWith(origin)),
+      bodyCaptured: captured || existing?.bodyCaptured === true,
+    });
+  }
+
+  return {
+    scripts: [...scripts.values()].sort((a, b) => a.url.localeCompare(b.url)),
+    routes: [...routes].sort(),
+  };
 }
 
 /**
@@ -199,6 +282,7 @@ export function assemble(input: AssembleInput): AssembledModel {
   );
 
   const tools = webMcpTools(input.events);
+  const { scripts, routes } = pageContext(input.events, input.firstPartyOrigins ?? []);
 
   // The API model groups by endpoint, not by origin, so the origin list is
   // derived here rather than read — one derivation, in the place that needs
@@ -300,6 +384,26 @@ export function assemble(input: AssembleInput): AssembledModel {
       id: tool.name,
       status: "observed",
     })),
+    ...routes.map((route): CoverageItem => ({
+      dimension: "route",
+      id: route,
+      status: "observed",
+    })),
+    ...scripts.map((script): CoverageItem => ({
+      dimension: "js_asset",
+      id: script.url,
+      // `analyzed` only where there is something to analyse. A script the
+      // scan saw go past but never captured is observed, not understood, and
+      // §10C.2 keeps those apart on purpose.
+      status: script.bodyCaptured ? "analyzed" : "observed",
+    })),
+    ...scripts
+      .filter((script) => script.firstParty)
+      .map((script): CoverageItem => ({
+        dimension: "first_party_js",
+        id: script.url,
+        status: script.bodyCaptured ? "analyzed" : "observed",
+      })),
     ...origins.map((origin): CoverageItem => ({
       dimension: "origin",
       id: origin,
@@ -324,6 +428,7 @@ export function assemble(input: AssembleInput): AssembledModel {
     coverage,
     score: scoreCoverage({ coverage }),
     gaps: buildGapQueue(input.unreached ?? []),
+    webmcp: tools,
     surface: buildAttackSurface({
       sessionId: input.sessionId,
       target: input.target,

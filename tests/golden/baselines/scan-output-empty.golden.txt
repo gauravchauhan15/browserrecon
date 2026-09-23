@@ -37,8 +37,10 @@
 
       browserrecon auth validate <profile>
 
-  Coverage is scoped by policy, authentication and budget. This is what was
-  reachable and observed, not everything that exists.
+  High-confidence coverage of the reachable and analyzable application surface
+  under the supplied target policy, authentication state, runtime session,
+  exploration budget and analysis limits. This is not a claim of complete
+  application coverage, and cannot be.
 ────────────────────────────────────────────────────────────────────────────────
 ===== report.md =====
 # BrowserRecon report — https://locked.example.com
@@ -54,15 +56,15 @@
 | Auth state | anonymous |
 | AI mode | off |
 
-> Coverage below is scoped by the Target Policy, the authentication state and
-> the scan budget. It describes what was reachable and observed — not
-> everything that exists.
+> High-confidence coverage of the reachable and analyzable application surface under the supplied target policy, authentication state, runtime session, exploration budget and analysis limits. This is not a claim of complete application coverage, and cannot be.
 
 ## 1. Coverage summary
 
 | Dimension | Observed | Discovered | Ratio |
 | --- | --- | --- | --- |
 | Pages | 1 | 1 | 100% |
+
+_Ratio is of what this scan discovered, never of what the application has._
 
 ## 2. Workflows
 
@@ -72,17 +74,21 @@ _No workflows were detected._
 
 _None._
 
-## 4. Origins
+## 4. WebMCP tools
+
+_None._
+
+## 5. Origins
 
 | Origin | Requests | Classification |
 | --- | --- | --- |
 | `https://locked.example.com` | 2 | first_party |
 
-## 5. JavaScript
+## 6. JavaScript
 
 _None._
 
-## 6. Access barriers
+## 7. Access barriers
 
 | Category | URL | Evidence |
 | --- | --- | --- |
@@ -90,13 +96,13 @@ _None._
 
 _No barrier was bypassed. Barriers are recorded, never circumvented._
 
-## 7. Coverage gaps
+## 8. Coverage gaps
 
 | Reason | Count | Remedy |
 | --- | --- | --- |
 | auth_required | 1 | Configure an auth profile and re-run. |
 
-## 8. Artifacts
+## 9. Artifacts
 
 | File | Contents | Records |
 | --- | --- | --- |

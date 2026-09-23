@@ -27,13 +27,16 @@ self-validating, with WebMCP integrated into it.
 | Coverage never claims completeness               | Score capped below 1 on a real scan, no "100%" or "complete" in its description, the §10C.6 caveat travels on the model, and an empty dimension scores nothing |
 | Attack-surface documented, versioned, validating | `surface.json` on disk matches the published schema version; `validateSurface` returns clean for it and rejects it with an empty known-id set                  |
 | §35B.5 chains resolve                            | Every link of every surface item's chain resolves against the log that scan wrote — walked, not asserted                                                       |
-| WebMCP integrated                                | A live scan of `webmcp-site` puts all three registered tools in the surface, each with source event ids                                                        |
+| WebMCP integrated                                | A live scan of `webmcp-site` puts all three registered tools in the surface and in the report, each with source event ids, and none is invoked                 |
+| The artifacts say what the model says            | `report.md`'s inventory, coverage table, workflows, WebMCP tools and file list are read back and checked against the model that produced them                  |
 | Three runs byte-identical after normalisation    | Three consecutive scans of `parallel-site` produce identical APIs, states, workflows, surface, score and coverage                                              |
 
 ## What the gate found
 
-Building it found **five defects that all 1721 existing tests were green
-for**. Every one was at a seam: two components each describing the same
+Building it found **defects that all 1721 existing tests were green for** —
+five in the model, and then, once the gate started reading the files a person
+opens rather than the model behind them, a further six in the reporting layer
+(below). Every one was at a seam: two components each describing the same
 payload, both self-consistent, disagreeing with each other. That is the only
 thing this file exists to catch, and it is worth recording that it caught five.
 
@@ -97,6 +100,69 @@ The gate's own synthetic log now uses a two-frame stack — a shared wrapper on
 top, the screen's caller beneath — because a log where every call has one
 identical frame quietly tests something easier than reality.
 
+## The model was right and every artifact was stale
+
+The gate above passed in full while `report.md` was still, in the same run:
+
+- listing the six HTML pages and the 404 favicon as APIs,
+- printing "Pages 7 of 7 — 100%" as its coverage summary,
+- saying "_No workflows were detected._" with a candidate in the model
+  beside it,
+- carrying empty `workflows`, `api_sequences`, `javascript` and
+  `coverage_gaps` arrays in `attack-surface.json`, after two milestones of
+  building all four,
+- pointing at an `events.jsonl` that does not exist, because the store writes
+  numbered segments,
+- and warning that `.output/` holds unredacted data while the session it had
+  just written sat somewhere else entirely.
+
+None of it was wrong about the engine. The reporting layer had not been
+rewired since M1, and every gate test until now read the model rather than
+the file a person opens. A model nobody reads is not the deliverable, so the
+gate has a section that reads the artifacts — and it is the section that
+found all of the above.
+
+Three further defects came out of producing one sample report and reading it:
+
+**Four wordings of one promise.** §10C.6's caveat existed as its own sentence
+in the coverage package, the JSON exporter, the surface model and the
+terminal summary. A single run printed two of them, which reads as the tool
+hedging twice about different things. One constant now, in the module that
+owns the score it qualifies.
+
+**A score nobody could reconcile with the table above it.** The coverage
+table was three counts assembled at the call site — Pages, APIs, Origins —
+each showing 100%, printed directly beneath "Coverage score 0.60". The score
+is computed from §10C.1's dimensions, so the dimensions are what the table
+shows.
+
+Two of those dimensions were never populated at all: a scan that fetched and
+captured two bundles reported `js_asset 0` and `first_party_js 0`, and the
+score docked itself 0.2 for JavaScript it had collected. The same for
+`route`, with seven pages visited. The fixture's honest score moved from 0.60
+to 0.78 once the model could see what the scan had actually done.
+
+**Two section nines and no section six.** Inserting the WebMCP section at
+position four renumbered five headings, and the renumbering was done by hand
+and half-done: the JavaScript table shipped under a heading reading `## 9.
+Artifacts`. Headings are now numbered from their index in `SECTION_ORDER`,
+and the gate finds sections by name — a test pinned to `## 5. JavaScript`
+reads the wrong section after an insertion and passes anyway, which is worse
+than failing.
+
+## A benchmark that measured the machine
+
+`spike.bench.test.ts` bounds tree-sitter at ten seconds for a 7.3 MiB bundle,
+against a measurement of ~730 ms. It failed at 50.5 s in the full suite and
+passed at 3.6 s alone, on the same laptop and the same commit: the suite runs
+several headless Chrome instances alongside it, and a wall-clock bound
+measures how busy the machine is.
+
+Its own module note predicted this — "a tight bound would fail on a loaded CI
+runner and teach everyone to ignore it" — and then the test was written with
+one anyway. It measures CPU time now, which is the parser's cost and is what
+§10B.9 is about. Time spent waiting for a core is not the parser's.
+
 ## WebMCP was built and never run
 
 `@browserrecon/collector-webmcp` has existed since BR-M1-24 and is thoroughly
@@ -116,6 +182,57 @@ whatever it likes straight into the event log.
 
 Absence stays silent. Almost no site has this, and a collector that explained
 itself on every scan would be noise on every scan.
+
+## The report was two milestones behind the model
+
+Found after the gate passed, while producing a reference report for review —
+which is why `docs/samples/` exists now and is regenerated from real scans.
+
+Every criterion above was green while `report.md` still listed the six HTML
+pages and the 404 favicon as APIs, printed "100%" in its first table, said
+"no workflows were detected" with a candidate sitting in the model beside it,
+showed no JavaScript, and pointed at an `events.jsonl` that does not exist —
+the store writes numbered segments. The terminal summary reported thirteen
+APIs for a fixture with three.
+
+The reporting layer had not been rewired since M1. The engine was right and
+every artifact a person reads was stale, because the gate asserted the model
+and never opened the files.
+
+Fixed, and now asserted: the report's inventory is the classified API model,
+its coverage table is the dimensions the score was computed from, its
+workflows are the candidates, its gap table uses §10C.7's own remedies, and
+its artifact list is read from disk. `attack-surface.json` carries each
+request's role and the derived workflows, sequences, JavaScript and gaps.
+
+Two more things fell out of it:
+
+- **A fourth and fifth wording of §10C.6's caveat.** The coverage package, the
+  JSON exporter, the Markdown header and the terminal summary each had their
+  own sentence. One constant now, in the package that owns the score.
+- **A WebMCP section in the report.** §35B.2 pins nine sections; this is a
+  tenth, sitting with the API inventory. `surface.json` listed three
+  registered tools including `deleteAccount`, and the report a person reads
+  mentioned none of them.
+
+## The polling fix had to be made deterministic twice
+
+Classifying a heartbeat needs an interval, and an interval comes from
+wall-clock timestamps — so the first version made the verdict depend on how
+fast the machine was that day, and §36.2's three-identical-runs gate caught
+it: the same fixture came back `polling_heartbeat` on one run and
+`application_asset` on the next.
+
+Two structural fixes, neither of them a tolerance:
+
+- **A heartbeat has a period.** Requests milliseconds apart are a page load
+  firing everything at once, and at that scale relative jitter is scheduler
+  noise — gaps of 2ms and 3ms score 0.2, well inside the tolerance. One
+  second is the floor.
+- **A repeated asset is an asset.** A stylesheet fetched once per page repeats
+  at the interval between page visits with the evenness of a crawler. The
+  asset checks now run before the polling check, so only something carrying
+  an application payload can be a heartbeat.
 
 ## Where the five controls are tested, and why it differs
 
@@ -163,3 +280,10 @@ live scan anywhere.
 - **`assemble` is not the CLI's only path to these numbers.** The scan command
   calls it, and the gate calls it directly; a future `export` command that
   reimplements any part of it would not be caught here.
+- **The report's prose is not checked, only its facts.** The gate asserts what
+  the tables contain and that they agree with the model. Whether the sentences
+  around them are the right sentences is a judgement no test makes.
+- **Workflow names are route templates.** `reportWorkflows` names a candidate
+  after its first route because naming is §18.2's job and needs V4. A reader
+  sees `/api/orders/pending` where they will later see "order review", and a
+  label invented by the reporting layer would read like a finding.

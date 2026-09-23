@@ -32,6 +32,7 @@ import {
   noisySite,
   parallelSite,
   webmcpSite,
+  WEBMCP_TOOLS,
   startFixture,
   type RunningFixture,
 } from "@browserrecon/fixtures";
@@ -132,6 +133,22 @@ async function scanAndAssemble(
     sessionDir,
     code,
   };
+}
+
+/**
+ * One section of the report, found by name rather than by number.
+ *
+ * The numbers move: inserting "WebMCP tools" at position four renumbered
+ * five headings, and a test pinned to `## 5. JavaScript` then reads the
+ * wrong section and passes anyway, which is worse than failing.
+ */
+function section(report: string, name: string): string {
+  const heading = new RegExp(`^## \\d+\\. ${name}\\s*$`, "m");
+  const start = report.search(heading);
+  if (start === -1) return "";
+  const rest = report.slice(start).replace(heading, "");
+  const next = rest.search(/^## \d+\. /m);
+  return next === -1 ? rest : rest.slice(0, next);
 }
 
 describe("preconditions", () => {
@@ -636,6 +653,272 @@ describe("V3: the attack-surface model is documented, versioned and self-validat
         expect(
           model.coverage.dimensions.find((d) => d.dimension === "webmcp")?.total,
         ).toBeGreaterThan(0);
+      } finally {
+        await fixture.close();
+      }
+    },
+    180_000,
+  );
+});
+
+/**
+ * The artifacts a person reads, not the model behind them.
+ *
+ * This section exists because the first version of this gate did not have
+ * it. Everything above passed while `report.md` still listed the six HTML
+ * pages and the favicon as APIs, claimed "100%" coverage in its first table,
+ * reported "no workflows were detected" with a candidate in the model beside
+ * it, and pointed at an `events.jsonl` that does not exist — the store writes
+ * numbered segments. The engine was right and every artifact was stale,
+ * because the reporting layer had not been rewired since M1.
+ *
+ * A model nobody reads is not the deliverable.
+ */
+describe("V3: the artifacts say what the model says", () => {
+  gateTest(
+    "writes a report whose API inventory is application APIs",
+    async () => {
+      const fixture = await startFixture(dynamicSite());
+      try {
+        const { model, sessionDir } = await scanAndAssemble(fixture, ["--max-pages", "8"]);
+        const report = readFileSync(join(sessionDir, "report.md"), "utf8");
+        const inventory = section(report, "API inventory");
+
+        expect(inventory).toContain("/api/orders/pending");
+        for (const notAnApi of ["/favicon.ico", "/app.js", "/settings", "`http"]) {
+          if (notAnApi === "`http") continue;
+          expect(inventory, `${notAnApi} is in the API inventory`).not.toContain(notAnApi);
+        }
+        // And it agrees with the model beside it, rather than counting
+        // something else.
+        for (const api of model.api.apis) {
+          expect(inventory).toContain(api.identity.pathTemplate);
+        }
+      } finally {
+        await fixture.close();
+      }
+    },
+    180_000,
+  );
+
+  gateTest(
+    "never prints a completeness claim, and shows the capped score",
+    async () => {
+      const fixture = await startFixture(dynamicSite());
+      try {
+        const { model, sessionDir } = await scanAndAssemble(fixture, ["--max-pages", "8"]);
+        const report = readFileSync(join(sessionDir, "report.md"), "utf8");
+
+        expect(report).toContain(`Coverage score ${model.score.score.toFixed(2)}`);
+        expect(report).toMatch(/never of what the application has/i);
+        expect(report).toMatch(/not a claim of complete application coverage/i);
+      } finally {
+        await fixture.close();
+      }
+    },
+    180_000,
+  );
+
+  gateTest(
+    "shows the dimensions the score was computed from",
+    async () => {
+      // The coverage table used to be three counts assembled at the call
+      // site — Pages, APIs, Origins — every one of them 100%, printed beside
+      // a score of 0.60 a reader had no way to reconcile with them. Two of
+      // §10C.1's dimensions were also never populated at all: a scan that
+      // fetched and captured two bundles reported `js_asset 0` and docked
+      // its own score 0.2 for JavaScript it had collected.
+      const fixture = await startFixture(dynamicSite());
+      try {
+        const { model, sessionDir } = await scanAndAssemble(fixture, ["--max-pages", "8"]);
+        const report = readFileSync(join(sessionDir, "report.md"), "utf8");
+        const summary = section(report, "Coverage summary");
+
+        const measured = model.coverage.dimensions.filter((d) => d.total > 0);
+        expect(measured.length).toBeGreaterThan(4);
+        for (const dimension of measured) {
+          expect(summary, `${dimension.dimension} is measured but not in the table`).toMatch(
+            new RegExp(`\\| ${dimension.total} \\|`),
+          );
+        }
+
+        // The JavaScript the report lists in section 5 is the JavaScript
+        // coverage counted, rather than two independent readings of one log.
+        const scripts = section(report, "JavaScript").match(/^\| `/gm);
+        expect(scripts?.length).toBe(
+          model.coverage.dimensions.find((d) => d.dimension === "js_asset")?.total,
+        );
+      } finally {
+        await fixture.close();
+      }
+    },
+    180_000,
+  );
+
+  gateTest(
+    "reports the workflows the model found",
+    async () => {
+      const fixture = await startFixture(dynamicSite());
+      try {
+        const { model, sessionDir } = await scanAndAssemble(fixture, ["--max-pages", "8"]);
+        expect(model.workflows.candidates.length).toBeGreaterThan(0);
+
+        const report = readFileSync(join(sessionDir, "report.md"), "utf8");
+        expect(report).not.toContain("_No workflows were detected._");
+        for (const candidate of model.workflows.candidates) {
+          expect(report).toContain(candidate.workflow_id);
+          // §18.1: a low-confidence candidate is collapsed, never dropped.
+          if (candidate.lowConfidence) expect(report).toContain("low confidence");
+        }
+      } finally {
+        await fixture.close();
+      }
+    },
+    180_000,
+  );
+
+  gateTest(
+    "names files that exist, and warns about the directory it wrote to",
+    async () => {
+      const fixture = await startFixture(dynamicSite());
+      try {
+        const { sessionDir } = await scanAndAssemble(fixture, ["--max-pages", "8"]);
+        const report = readFileSync(join(sessionDir, "report.md"), "utf8");
+
+        // Named relative to the session directory the report sits in, so
+        // they are readable — and they have to resolve there.
+        const files = section(report, "Artifacts");
+        const paths = [...files.matchAll(/^\| `([^`/][^`]*)` \|/gm)].map((match) => match[1]);
+        expect(paths.length).toBeGreaterThanOrEqual(3);
+        for (const path of paths) {
+          expect(
+            existsSync(join(sessionDir, path as string)),
+            `${path} does not exist in the session directory`,
+          ).toBe(true);
+        }
+        expect(paths.some((path) => /^events-\d+\.jsonl$/.test(path as string))).toBe(true);
+        expect(report).toContain(`${sessionDir} contains UNREDACTED`);
+      } finally {
+        await fixture.close();
+      }
+    },
+    180_000,
+  );
+
+  gateTest(
+    "reports every registered tool, and invokes none of them",
+    async () => {
+      // §7.2's sharpest case. `webmcp-site` publishes a `deleteAccount` tool
+      // wired to `DELETE /api/account`, precisely so "reported, never
+      // invoked" is an assertion rather than a claim — and the first sample
+      // report listed three tools in `surface.json` and named none of them
+      // where a person would read.
+      const fixture = await startFixture(webmcpSite());
+      try {
+        const { sessionDir } = await scanAndAssemble(fixture, ["--max-pages", "4"]);
+        const report = readFileSync(join(sessionDir, "report.md"), "utf8");
+        const tools = section(report, "WebMCP tools");
+
+        for (const tool of WEBMCP_TOOLS) {
+          expect(tools, `${tool.name} is missing from the report`).toContain(tool.name);
+          expect(tools).toContain(tool.endpoint);
+        }
+        expect(tools).toMatch(/never invoked/i);
+
+        // The server's own record, not the scan's account of itself.
+        expect(
+          fixture.requests
+            .filter((request) => request.method !== "GET")
+            .map((request) => `${request.method} ${request.pathname}`),
+          "a tool endpoint was called",
+        ).toEqual([]);
+      } finally {
+        await fixture.close();
+      }
+    },
+    180_000,
+  );
+
+  gateTest(
+    "does not collide when two scans share one output directory",
+    async () => {
+      // Every scan used to be `sess_0001`, so a second scan into the same
+      // `--out` died on the event store's own guard — an internal error with
+      // a stack trace, and the guard was right: two scans were about to
+      // share one log. Pointing every run at one directory is the natural
+      // thing to do, and the Gate A runbook says to, so this was the second
+      // command anybody would have run.
+      const fixture = await startFixture(dynamicSite());
+      const outputRoot = mkdtempSync(join(tmpdir(), "br-m3-shared-"));
+      try {
+        const scan = async (): Promise<number> =>
+          run({
+            argv: [
+              "scan",
+              fixture.origin,
+              "--i-am-authorized",
+              "--no-deny-loopback",
+              "--allowed-origins",
+              fixture.origin,
+              "--out",
+              outputRoot,
+              "--max-pages",
+              "2",
+            ],
+            io: { out: () => {}, err: () => {}, env: {}, version: "0.1.0-gate" },
+          });
+
+        expect(await scan()).toBe(0);
+        expect(await scan()).toBe(0);
+
+        const sessions = readdirSync(outputRoot).sort();
+        expect(sessions).toEqual(["sess_0001", "sess_0002"]);
+        // Each keeps its own log, rather than the second appending to the
+        // first — which is the failure the store's guard was there to stop.
+        for (const session of sessions) {
+          const events = await readAllEvents(join(outputRoot, session));
+          expect(events.length, session).toBeGreaterThan(0);
+          expect(new Set(events.map((e) => e.session_id))).toEqual(new Set([session]));
+        }
+      } finally {
+        await fixture.close();
+      }
+    },
+    240_000,
+  );
+
+  gateTest(
+    "publishes the derived model in the JSON export too",
+    async () => {
+      const fixture = await startFixture(dynamicSite());
+      try {
+        const { model, sessionDir } = await scanAndAssemble(fixture, ["--max-pages", "8"]);
+        const exported = JSON.parse(
+          readFileSync(join(sessionDir, "attack-surface.json"), "utf8"),
+        ) as {
+          apis: { url: string; role?: string }[];
+          workflows: { workflow_id: string }[];
+          api_sequences: unknown[];
+          javascript: unknown[];
+          coverage_gaps: unknown[];
+          scan: { coverage_caveat: string };
+        };
+
+        // Observation-level by design, so the page loads are still here —
+        // what they carry now is the verdict, so a consumer does not have to
+        // re-derive which of them are endpoints.
+        expect(exported.apis.every((api) => api.role !== undefined)).toBe(true);
+        expect(exported.apis.some((api) => api.role === "application_asset")).toBe(true);
+        expect(exported.apis.filter((api) => api.role === "application_api")).toHaveLength(
+          model.api.apis.length,
+        );
+
+        expect(exported.workflows.map((w) => w.workflow_id)).toEqual(
+          model.workflows.candidates.map((c) => c.workflow_id),
+        );
+        expect(exported.api_sequences.length).toBe(model.sequences.sequences.length);
+        expect(exported.javascript.length).toBeGreaterThan(0);
+        expect(exported.scan.coverage_caveat).toBe(COVERAGE_CAVEAT);
       } finally {
         await fixture.close();
       }

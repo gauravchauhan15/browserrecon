@@ -139,8 +139,21 @@ export function createSecureOutputDir(path: string): void {
   }
 }
 
-/** The warning the docs and the terminal summary both have to carry. */
-export const UNREDACTED_OUTPUT_WARNING =
-  ".output/ contains UNREDACTED captured data — cookies, tokens, authorization " +
-  "headers and request bodies. Do not commit it, attach it to a ticket, or sync " +
-  "it to cloud storage.";
+/** What the warning says about whichever directory actually holds the data. */
+export function unredactedOutputWarning(directory: string): string {
+  return (
+    `${directory} contains UNREDACTED captured data — cookies, tokens, authorization ` +
+    "headers and request bodies. Do not commit it, attach it to a ticket, or sync " +
+    "it to cloud storage."
+  );
+}
+
+/**
+ * The warning the docs and the terminal summary both have to carry.
+ *
+ * `.output/` is the default, and the report names its own session directory
+ * instead: a warning about a path the reader does not have is one they read
+ * past. Found while producing a reference report — the file sat in `/tmp` and
+ * warned about `.output/`.
+ */
+export const UNREDACTED_OUTPUT_WARNING = unredactedOutputWarning(".output/");

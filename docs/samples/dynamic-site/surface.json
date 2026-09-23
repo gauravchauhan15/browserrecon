@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0.0",
+  "session_id": "sess_0001",
+  "target": "http://127.0.0.1:8080",
+  "items": [
+    {
+      "surface_id": "srf_0001",
+      "kind": "api_endpoint",
+      "identity": "GET http://127.0.0.1:8080/api/orders/archive",
+      "provenance": "observed",
+      "api_id": "api_0002",
+      "workflow_id": "wf_0001",
+      "workflow_step": 2,
+      "interaction_id": "int_0001",
+      "navigation_id": "nav_0001",
+      "state_after": "viewing_about",
+      "auth_context": "anonymous",
+      "source_event_ids": ["evt_000045", "evt_000047"]
+    },
+    {
+      "surface_id": "srf_0002",
+      "kind": "api_endpoint",
+      "identity": "GET http://127.0.0.1:8080/api/orders/pending",
+      "provenance": "observed",
+      "api_id": "api_0001",
+      "workflow_id": "wf_0001",
+      "workflow_step": 1,
+      "interaction_id": "int_0001",
+      "navigation_id": "nav_0001",
+      "state_after": "viewing_about",
+      "auth_context": "anonymous",
+      "source_event_ids": ["evt_000044", "evt_000046"]
+    },
+    {
+      "surface_id": "srf_0003",
+      "kind": "api_endpoint",
+      "identity": "GET http://127.0.0.1:8080/api/rows",
+      "provenance": "observed",
+      "api_id": "api_0003",
+      "interaction_id": "int_0002",
+      "navigation_id": "nav_0001",
+      "state_after": "viewing_about",
+      "auth_context": "anonymous",
+      "source_event_ids": ["evt_000059", "evt_000061"]
+    },
+    {
+      "surface_id": "srf_0004",
+      "kind": "origin",
+      "identity": "http://127.0.0.1:8080",
+      "provenance": "observed",
+      "auth_context": "anonymous",
+      "source_event_ids": ["evt_000044", "evt_000046", "evt_000045", "evt_000047", "evt_000059"]
+    }
+  ],
+  "coverage_caveat": "High-confidence coverage of the reachable and analyzable application surface under the supplied target policy, authentication state, runtime session, exploration budget and analysis limits. This is not a claim of complete application coverage, and cannot be."
+}

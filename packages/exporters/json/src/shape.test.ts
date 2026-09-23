@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { COVERAGE_CAVEAT as CANONICAL_CAVEAT } from "@browserrecon/coverage";
 import {
   COVERAGE_CAVEAT,
   EXPORT_SCHEMA_VERSION,
@@ -85,8 +86,15 @@ describe("the coverage caveat", () => {
   });
 
   it("says coverage is bounded rather than complete", () => {
-    expect(COVERAGE_CAVEAT).toMatch(/not everything that exists/i);
+    expect(COVERAGE_CAVEAT).toMatch(/not a claim of complete application coverage/i);
     expect(COVERAGE_CAVEAT).toMatch(/policy/i);
+  });
+
+  it("is the coverage package's sentence, not a second one", () => {
+    // Three packages each had their own wording of §10C.6, and one report
+    // can print two of them — which reads as the tool hedging twice about
+    // different things rather than once about one.
+    expect(COVERAGE_CAVEAT).toBe(CANONICAL_CAVEAT);
   });
 });
 

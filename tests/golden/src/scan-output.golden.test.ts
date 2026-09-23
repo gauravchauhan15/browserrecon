@@ -98,6 +98,13 @@ const TIER0_REPORT: ReportInput = {
     { dimension: "APIs", observed: 18, discovered: 25 },
     { dimension: "Origins", observed: 5, discovered: 5 },
   ],
+  webmcpTools: [
+    {
+      name: "searchProducts",
+      endpoint: "/api/products/search",
+      description: "Search the catalog by keyword.",
+    },
+  ],
   workflows: [
     {
       id: "wf_0001",
@@ -195,6 +202,7 @@ describe("end-of-scan output", () => {
               },
               coverage: [{ dimension: "Pages", observed: 1, discovered: 1 }],
               workflows: [],
+              webmcpTools: [],
               apis: [],
               origins: [
                 {

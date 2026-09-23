@@ -1,0 +1,33 @@
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BrowserRecon — http://127.0.0.1:8080
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Scan                      complete · 3s · normal
+  Discovery                 browser
+  AI                        off
+
+  Observed
+    Pages visited           1 of 1 discovered
+    Workflows               0
+    APIs                    1 observed, 0 discovered but not reached
+    Origins                 1
+    JS assets               0
+
+  Artifacts
+    …/home/you/.output/sess_0001/report.md
+    …/home/you/.output/sess_0001/attack-surface.json
+    …/home/you/.output/sess_0001/surface.json
+
+  …/home/you/.output/sess_0001 holds UNREDACTED captured data.
+  Do not commit it, attach it to a ticket, or sync it to cloud storage.
+
+  Next: Install a crawler for broader URL discovery, or pipe your own list in
+  with --import-urls.
+
+  High-confidence coverage of the reachable and analyzable application surface
+  under the supplied target policy, authentication state, runtime session,
+  exploration budget and analysis limits. This is not a claim of complete
+  application coverage, and cannot be.
+────────────────────────────────────────────────────────────────────────────────
+

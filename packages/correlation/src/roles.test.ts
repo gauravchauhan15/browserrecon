@@ -320,3 +320,79 @@ describe("an authentication path is not an authentication endpoint", () => {
     );
   });
 });
+
+describe("a burst is not a heartbeat", () => {
+  it("ignores repeats that are milliseconds apart", () => {
+    // Found by the M1 gate: three scans of one fixture disagreed about
+    // whether an endpoint was a heartbeat. At page-load timescales relative
+    // jitter is scheduler noise — two gaps of 2ms and 3ms score 0.2, inside
+    // the tolerance — so the verdict flipped between runs. §36.2 requires it
+    // not to.
+    expect(
+      roleOf({
+        url: "https://app.test/api/tick",
+        repeatCount: 8,
+        repeatIntervalMs: 3,
+        repeatJitter: 0.05,
+      }),
+    ).toBe("application_api");
+  });
+
+  it("still recognises one at a real polling interval", () => {
+    expect(
+      roleOf({
+        url: "https://app.test/api/tick",
+        repeatCount: 8,
+        repeatIntervalMs: 5_000,
+        repeatJitter: 0.05,
+      }),
+    ).toBe("polling_heartbeat");
+  });
+});
+
+describe("a repeated asset is not a heartbeat", () => {
+  it("calls a stylesheet fetched on every page an asset", () => {
+    // Found by §36.2's three-identical-runs gate: a crawler visits pages a
+    // second or two apart, so a shared bundle repeats at a steady interval
+    // and scored as polling on some runs and not others. The verdict must
+    // not depend on how fast the machine was that day.
+    expect(
+      roleOf({
+        url: "https://app.test/app.css",
+        mimeType: "text/css",
+        repeatCount: 4,
+        repeatIntervalMs: 2_000,
+        repeatJitter: 0.05,
+      }),
+    ).toBe("application_asset");
+  });
+
+  it("calls a repeatedly loaded page a page", () => {
+    expect(
+      roleOf({
+        url: "https://app.test/dashboard",
+        resourceType: "Document",
+        mimeType: "text/html",
+        repeatCount: 4,
+        repeatIntervalMs: 2_000,
+        repeatJitter: 0.05,
+      }),
+    ).toBe("application_asset");
+  });
+
+  it("still calls a JSON endpoint on a timer a heartbeat", () => {
+    // The counterweight. §17A.2's signal is about application traffic
+    // firing without anyone asking, which is the noise that pollutes
+    // workflow detection — and that is what must still be caught.
+    expect(
+      roleOf({
+        url: "https://app.test/api/status",
+        resourceType: "Fetch",
+        mimeType: "application/json",
+        repeatCount: 4,
+        repeatIntervalMs: 2_000,
+        repeatJitter: 0.05,
+      }),
+    ).toBe("polling_heartbeat");
+  });
+});

@@ -534,6 +534,9 @@ importers:
       '@browserrecon/core':
         specifier: workspace:*
         version: link:../../core
+      '@browserrecon/coverage':
+        specifier: workspace:*
+        version: link:../../coverage
       '@browserrecon/events':
         specifier: workspace:*
         version: link:../../events
@@ -543,6 +546,9 @@ importers:
       '@browserrecon/core':
         specifier: workspace:*
         version: link:../../core
+      '@browserrecon/coverage':
+        specifier: workspace:*
+        version: link:../../coverage
       '@browserrecon/events':
         specifier: workspace:*
         version: link:../../events

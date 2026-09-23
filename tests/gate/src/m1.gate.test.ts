@@ -176,7 +176,12 @@ describe("V1 is done when: a scan produces useful output", () => {
         expect(result.out).toContain("max_pages");
         expect(result.out).toMatch(/Why coverage stopped/);
         // §10C.6, in the output a first-time user actually reads.
-        expect(result.out).toMatch(/not everything that exists/);
+        // Whitespace collapsed first: the caveat is wrapped to the terminal
+        // width, so asserting on the raw text tests the wrapper rather than
+        // the sentence.
+        expect(result.out.replace(/\s+/g, " ")).toMatch(
+          /not a claim of complete application coverage/,
+        );
         expect(result.out).not.toMatch(/full coverage|complete coverage/i);
       } finally {
         await fixture.close();

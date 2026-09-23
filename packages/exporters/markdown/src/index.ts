@@ -18,15 +18,27 @@
  * issue one: coverage is bounded by policy, by authentication, and by budget,
  * and all three are the user's choices rather than facts about the target.
  */
-import { UNREDACTED_OUTPUT_WARNING } from "@browserrecon/core";
+import { UNREDACTED_OUTPUT_WARNING, unredactedOutputWarning } from "@browserrecon/core";
+import { COVERAGE_CAVEAT } from "@browserrecon/coverage";
 
 export const PACKAGE_NAME = "@browserrecon/exporter-markdown" as const;
 
-/** §35B.2's fixed order. Exported so a test can assert against it. */
+/**
+ * §35B.2's fixed order. Exported so a test can assert against it.
+ *
+ * "WebMCP tools" is an addition to the nine the plan names, sitting with the
+ * API inventory because that is what it is: a list of operations the page
+ * publishes, usually wired straight to the endpoints above it. §21 and §44
+ * make it part of the surface, and the first sample report produced for
+ * review listed three registered tools in `surface.json` and mentioned none
+ * of them here. Added now rather than later because the cost of renumbering
+ * is a pre-release report nobody has archived.
+ */
 export const SECTION_ORDER = [
   "Coverage summary",
   "Workflows",
   "API inventory",
+  "WebMCP tools",
   "Origins",
   "JavaScript",
   "Access barriers",
@@ -36,6 +48,19 @@ export const SECTION_ORDER = [
 ] as const;
 
 export type SectionName = (typeof SECTION_ORDER)[number];
+
+/**
+ * A section's heading, numbered from its position in `SECTION_ORDER`.
+ *
+ * Hand-written numbers next to an array index is a drift waiting to happen,
+ * and it happened: inserting "WebMCP tools" at position four renumbered five
+ * headings, and the JavaScript section came out labelled `## 9. Artifacts`.
+ * The report had two section nines and no section six, which is the kind of
+ * thing a reader notices before anything else on the page.
+ */
+function heading(name: SectionName): string {
+  return `## ${SECTION_ORDER.indexOf(name) + 1}. ${name}`;
+}
 
 /** Sections rendered only when the tier produced them (§35B.2). */
 const TIER_GATED: ReadonlySet<SectionName> = new Set(["Security hypotheses"]);
@@ -84,12 +109,34 @@ export interface ReportInput {
     readonly observed: number;
     readonly discovered: number;
   }[];
+  /**
+   * §10C's capped score, with the sentence that explains it.
+   *
+   * The per-dimension table alone reads as a completeness claim: "Pages 7 of
+   * 7 — 100%" is true of what the scan discovered and says nothing about the
+   * application, which is the exact confusion §10C.6 exists to prevent. The
+   * score is capped below 1 and carries its own caveat, so it goes above the
+   * table rather than under it.
+   */
+  readonly score?: { readonly value: number; readonly description: string } | undefined;
   readonly workflows: readonly WorkflowReport[];
   readonly apis: readonly {
     readonly method: string;
     readonly url: string;
     readonly status?: number | undefined;
     readonly role: string;
+  }[];
+  /**
+   * Tools the page registered — §21, §44.
+   *
+   * `destructive` is a *report* of what the page exposes. §7.2: an exposed
+   * destructive operation is something to name, never something to try, and
+   * nothing in this tool invokes one.
+   */
+  readonly webmcpTools: readonly {
+    readonly name: string;
+    readonly endpoint?: string | undefined;
+    readonly description?: string | undefined;
   }[];
   readonly origins: readonly {
     readonly origin: string;
@@ -113,6 +160,8 @@ export interface ReportInput {
     readonly contents: string;
     readonly records?: number | undefined;
   }[];
+  /** The session directory, so the warning names the path the reader has. */
+  readonly outputDir?: string | undefined;
   /** Only present from V6. Absent means the section is omitted entirely. */
   readonly hypotheses?:
     readonly { readonly claim: string; readonly evidence: string }[] | undefined;
@@ -189,14 +238,20 @@ export function renderReport(input: ReportInput): string {
   );
   // §10C.6, in the header rather than a footnote: a caveat nobody scrolls to
   // is a caveat nobody reads.
-  out.push(
-    "> Coverage below is scoped by the Target Policy, the authentication state and",
-    "> the scan budget. It describes what was reachable and observed — not",
-    "> everything that exists.",
-    "",
-  );
+  //
+  // The sentence itself is the coverage package's. This used to be a
+  // paraphrase of it, which made four wordings of one promise across the
+  // repository — and a reader comparing two of them has to work out whether
+  // they mean different things.
+  out.push(`> ${COVERAGE_CAVEAT}`, "");
 
-  out.push(`## 1. ${SECTION_ORDER[0]}`, "");
+  out.push(heading("Coverage summary"), "");
+  if (input.score !== undefined) {
+    out.push(
+      `**Coverage score ${input.score.value.toFixed(2)}** — ${input.score.description}`,
+      "",
+    );
+  }
   out.push(
     table(
       ["Dimension", "Observed", "Discovered", "Ratio"],
@@ -209,14 +264,16 @@ export function renderReport(input: ReportInput): string {
     ),
   );
 
-  out.push(`## 2. ${SECTION_ORDER[1]}`, "");
+  out.push("_Ratio is of what this scan discovered, never of what the application has._", "");
+
+  out.push(heading("Workflows"), "");
   out.push(
     input.workflows.length === 0
       ? "_No workflows were detected._\n"
       : input.workflows.map(renderWorkflow).join("\n"),
   );
 
-  out.push(`## 3. ${SECTION_ORDER[2]}`, "");
+  out.push(heading("API inventory"), "");
   out.push(
     table(
       ["Method", "URL", "Status", "Role"],
@@ -229,7 +286,22 @@ export function renderReport(input: ReportInput): string {
     ),
   );
 
-  out.push(`## 4. ${SECTION_ORDER[3]}`, "");
+  out.push(heading("WebMCP tools"), "");
+  out.push(
+    table(
+      ["Tool", "Endpoint", "Description"],
+      input.webmcpTools.map((tool) => [
+        `\`${tool.name}\``,
+        tool.endpoint === undefined ? "—" : `\`${tool.endpoint}\``,
+        tool.description ?? "—",
+      ]),
+    ),
+  );
+  if (input.webmcpTools.length > 0) {
+    out.push("_Tools are reported, never invoked (§7.2)._", "");
+  }
+
+  out.push(heading("Origins"), "");
   out.push(
     table(
       ["Origin", "Requests", "Classification"],
@@ -237,7 +309,7 @@ export function renderReport(input: ReportInput): string {
     ),
   );
 
-  out.push(`## 5. ${SECTION_ORDER[4]}`, "");
+  out.push(heading("JavaScript"), "");
   out.push(
     table(
       ["Script", "Size", "Party", "Analysis"],
@@ -250,7 +322,7 @@ export function renderReport(input: ReportInput): string {
     ),
   );
 
-  out.push(`## 6. ${SECTION_ORDER[5]}`, "");
+  out.push(heading("Access barriers"), "");
   out.push(
     table(
       ["Category", "URL", "Evidence"],
@@ -261,7 +333,7 @@ export function renderReport(input: ReportInput): string {
   // able to tell that the barriers were recorded rather than defeated.
   out.push("_No barrier was bypassed. Barriers are recorded, never circumvented._", "");
 
-  out.push(`## 7. ${SECTION_ORDER[6]}`, "");
+  out.push(heading("Coverage gaps"), "");
   out.push(
     table(
       ["Reason", "Count", "Remedy"],
@@ -269,20 +341,27 @@ export function renderReport(input: ReportInput): string {
     ),
   );
 
-  out.push(`## 8. ${SECTION_ORDER[7]}`, "");
+  out.push(heading("Artifacts"), "");
   out.push(
     table(
       ["File", "Contents", "Records"],
       input.artifacts.map((a) => [`\`${a.path}\``, a.contents, String(a.records ?? "—")]),
     ),
   );
-  out.push(`> ${UNREDACTED_OUTPUT_WARNING}`, "");
+  out.push(
+    `> ${
+      input.outputDir === undefined
+        ? UNREDACTED_OUTPUT_WARNING
+        : unredactedOutputWarning(input.outputDir)
+    }`,
+    "",
+  );
 
   // §35B.2: omitted entirely at Tier 0/1 rather than rendered empty. An
   // empty "Security hypotheses" heading reads as "we looked and found
   // nothing", which is a stronger claim than "we did not look".
   if (input.hypotheses !== undefined) {
-    out.push(`## 9. ${SECTION_ORDER[8]}`, "");
+    out.push(heading("Security hypotheses"), "");
     out.push(
       table(
         ["Claim", "Evidence"],

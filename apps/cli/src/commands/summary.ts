@@ -23,6 +23,8 @@
  * as no summary.
  */
 
+import { COVERAGE_CAVEAT } from "@browserrecon/coverage";
+
 export const TERMINAL_WIDTH = 80;
 
 export interface ScanSummary {
@@ -233,10 +235,13 @@ export function renderSummary(summary: ScanSummary): string {
     if (next.command !== undefined) out.push("", `      ${next.command}`);
   }
 
-  // §10C.6, last so it is the final thing read.
+  // §10C.6, last so it is the final thing read — and the coverage package's
+  // own sentence, not a fifth paraphrase of it. A user who reads the terminal
+  // and then opens report.md should meet one promise, worded once; five
+  // wordings across the repository made "do these mean different things?" a
+  // question a reader had to answer for themselves.
   out.push("");
-  out.push("  Coverage is scoped by policy, authentication and budget. This is what was");
-  out.push("  reachable and observed, not everything that exists.");
+  out.push(...wrap(COVERAGE_CAVEAT, 2));
   out.push(rule(), "");
 
   return out.join("\n");

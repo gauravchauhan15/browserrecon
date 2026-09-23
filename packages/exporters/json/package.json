@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@browserrecon/core": "workspace:*",
+    "@browserrecon/coverage": "workspace:*",
     "@browserrecon/events": "workspace:*"
   }
 }

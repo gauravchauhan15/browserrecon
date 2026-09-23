@@ -66,25 +66,35 @@ describe("BR-M2-05: tree-sitter on a real minified bundle", () => {
   spikeTest(
     "parses and extracts within §10B.9's bounds",
     () => {
+      // CPU time, not wall clock. The suite runs several headless Chrome
+      // instances alongside this, and a bound on elapsed time measures how
+      // busy the machine is: this took 3.6 s alone and 50.5 s in the full
+      // run, on the same laptop, on the same commit. That is the flake the
+      // module note above predicted and then walked into — "a tight bound
+      // would fail on a loaded CI runner and teach everyone to ignore it".
+      //
+      // What §10B.9 is about is the parser's cost, which is what this now
+      // measures. Time spent waiting for a core is not the parser's.
       const analyzer = createTreeSitterAnalyzer();
-      const started = Date.now();
+      const started = process.cpuUsage();
       const result = analyzer.analyze({
         script: "spike.js",
         source: source as string,
         timeBudgetMs: 60_000,
       });
-      const elapsed = Date.now() - started;
+      const spent = process.cpuUsage(started);
+      const elapsed = Math.round((spent.user + spent.system) / 1000);
 
       // It completed rather than erroring or being cut off.
       expect(result.status, result.limitReason).toBe("complete");
       expect(result.bytes).toBeGreaterThanOrEqual(FIVE_MB);
 
-      // Measured at ~730 ms for 7.3 MiB on a developer machine. Ten seconds
-      // is the failure threshold, not the expectation: it catches an order
-      // of magnitude, which is what a bad upgrade looks like.
+      // Measured at ~730 ms of CPU for 7.3 MiB on a developer machine. Ten
+      // seconds is the failure threshold, not the expectation: it catches an
+      // order of magnitude, which is what a bad upgrade looks like.
       expect(
         elapsed,
-        `${elapsed} ms for ${(result.bytes / 1024 / 1024).toFixed(1)} MiB`,
+        `${elapsed} ms of CPU for ${(result.bytes / 1024 / 1024).toFixed(1)} MiB`,
       ).toBeLessThan(10_000);
 
       // And it actually extracted something, rather than walking a tree it

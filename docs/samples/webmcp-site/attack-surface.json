@@ -1,0 +1,125 @@
+{
+  "schema_version": "1.0.0",
+  "scan": {
+    "session_id": "sess_0001",
+    "target": "http://127.0.0.1:8080",
+    "started_at": "2026-09-23T13:38:23.697Z",
+    "finished_at": "2026-09-23T13:38:26.582Z",
+    "completeness": "complete",
+    "rate_profile": "normal",
+    "discovery_sources": ["browser"],
+    "ai_mode": "off",
+    "coverage_caveat": "High-confidence coverage of the reachable and analyzable application surface under the supplied target policy, authentication state, runtime session, exploration budget and analysis limits. This is not a claim of complete application coverage, and cannot be."
+  },
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:8080",
+      "requests": 3,
+      "classification": "first_party"
+    }
+  ],
+  "apis": [
+    {
+      "api_id": "api_0001",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/",
+      "observed": {
+        "status": 200,
+        "content_type": "text/html",
+        "resource_type": "Document"
+      },
+      "initiator": {
+        "type": "other"
+      },
+      "source_event_ids": ["evt_000009"],
+      "provenance": "observed",
+      "role": "application_asset"
+    },
+    {
+      "api_id": "api_0002",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/api/products/search?query=shoes",
+      "observed": {
+        "status": 200,
+        "content_type": "application/json",
+        "resource_type": "Fetch"
+      },
+      "initiator": {
+        "type": "script"
+      },
+      "source_event_ids": ["evt_000041"],
+      "provenance": "observed",
+      "role": "application_api",
+      "context": {
+        "interaction_id": "int_0001",
+        "navigation_id": "nav_0001"
+      },
+      "caused_by": ["interaction:int_0001", "script:http://127.0.0.1:8080/"]
+    },
+    {
+      "api_id": "api_0003",
+      "method": "GET",
+      "url": "http://127.0.0.1:8080/favicon.ico",
+      "observed": {
+        "status": 404,
+        "content_type": "text/plain",
+        "resource_type": "Other"
+      },
+      "initiator": {
+        "type": "other"
+      },
+      "source_event_ids": ["evt_000020"],
+      "provenance": "observed",
+      "role": "application_asset"
+    }
+  ],
+  "workflows": [],
+  "api_sequences": [
+    {
+      "sequence_id": "seq_0001",
+      "page": "http://127.0.0.1:8080/",
+      "navigationId": "nav_0001",
+      "authContext": "anonymous",
+      "positions": [
+        {
+          "step": 1,
+          "api_id": "api_0001",
+          "method": "GET",
+          "url": "http://127.0.0.1:8080/api/products/search",
+          "sequence": 41,
+          "eventId": "evt_000041",
+          "status": 200,
+          "previous": [],
+          "next": [],
+          "initiator": {
+            "type": "script",
+            "script": "http://127.0.0.1:8080/"
+          },
+          "caused_by": [
+            {
+              "target": "interaction:int_0001",
+              "kind": "direct",
+              "basis": "the request was made while this interaction was the most recent one"
+            },
+            {
+              "target": "script:http://127.0.0.1:8080/",
+              "kind": "direct",
+              "basis": "named by Chrome as the request's initiator"
+            }
+          ],
+          "depends_on": [],
+          "page": "http://127.0.0.1:8080/",
+          "navigationId": "nav_0001",
+          "interactionId": "int_0001",
+          "authContext": "anonymous",
+          "parallel_with": []
+        }
+      ],
+      "distinctApis": 1
+    }
+  ],
+  "javascript": [],
+  "barriers": [],
+  "coverage_gaps": [],
+  "unreached_candidate_associations": []
+}
