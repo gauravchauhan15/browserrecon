@@ -16,6 +16,26 @@
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
+import * as prettier from "prettier";
+
+/**
+ * Format with Prettier, not with `JSON.stringify` alone.
+ *
+ * The `format` gate checks every committed file, including these, and
+ * Prettier disagrees with `JSON.stringify` about short arrays — it keeps
+ * `["a", "b"]` on one line where stringify always breaks it. The first
+ * committed schema happened to have arrays long enough to wrap, so the
+ * disagreement only surfaced when a shorter one arrived.
+ *
+ * One formatter of record means the two gates cannot disagree again.
+ */
+async function format(value, path) {
+  // Resolved from the repo's own .prettierrc, not left to Prettier's
+  // defaults — the default printWidth is 80 and this repo uses 96, which is
+  // exactly the difference that decides whether a five-element array wraps.
+  const options = (await prettier.resolveConfig(path)) ?? {};
+  return prettier.format(JSON.stringify(value, null, 2), { ...options, parser: "json" });
+}
 
 const check = process.argv.includes("--check");
 const root = process.cwd();
@@ -26,19 +46,30 @@ if (!existsSync(built)) {
   process.exit(1);
 }
 
+const surfaceBuilt = join(root, "packages/attack-surface/dist/index.js");
+if (!existsSync(surfaceBuilt)) {
+  console.error("packages/attack-surface is not built. Run `pnpm run build` first.");
+  process.exit(1);
+}
+
 const { buildEventEnvelopeSchema } = await import(built);
+const { buildAttackSurfaceSchema } = await import(surfaceBuilt);
 
 const outputs = [
   {
     path: join(root, "schemas/events/event-envelope.schema.json"),
     schema: buildEventEnvelopeSchema(),
   },
+  {
+    path: join(root, "schemas/attack-surface/attack-surface.schema.json"),
+    schema: buildAttackSurfaceSchema(),
+  },
 ];
 
 let drifted = 0;
 
 for (const { path, schema } of outputs) {
-  const serialized = JSON.stringify(schema, null, 2) + "\n";
+  const serialized = await format(schema, path);
   const relative = path.slice(root.length + 1);
 
   if (check) {

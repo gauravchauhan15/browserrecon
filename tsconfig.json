@@ -9,6 +9,9 @@
       "path": "./packages/api-model"
     },
     {
+      "path": "./packages/attack-surface"
+    },
+    {
       "path": "./packages/auth"
     },
     {
