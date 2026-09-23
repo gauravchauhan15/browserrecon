@@ -63,6 +63,9 @@
       "path": "./packages/correlation"
     },
     {
+      "path": "./packages/coverage"
+    },
+    {
       "path": "./packages/discovery/external"
     },
     {

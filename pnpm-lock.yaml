@@ -436,6 +436,15 @@ importers:
         specifier: workspace:*
         version: link:../events
 
+  packages/coverage:
+    dependencies:
+      '@browserrecon/core':
+        specifier: workspace:*
+        version: link:../core
+      '@browserrecon/events':
+        specifier: workspace:*
+        version: link:../events
+
   packages/discovery/external:
     dependencies:
       '@browserrecon/core':
