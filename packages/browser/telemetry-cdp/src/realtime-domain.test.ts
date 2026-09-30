@@ -50,6 +50,34 @@ function collector(bus: EventBus): EventEnvelope[] {
 const payloadsOf = <T>(seen: readonly EventEnvelope[], type: string): T[] =>
   seen.filter((envelope) => envelope.type === type).map((envelope) => envelope.payload as T);
 
+/**
+ * Drain until the exchange has finished, rather than for a fixed window.
+ *
+ * These tests used to wait `drain(600)` and then assert. That is a bet that a
+ * real browser completes a WebSocket or SSE exchange within 600 ms, which
+ * holds on an idle machine and does not when the rest of the suite is running
+ * several headless Chromes beside it — the assertion then fails with "the
+ * greeting frame was not recorded at all", which reads like a collector bug
+ * and is not one.
+ *
+ * Found on a fresh clone: this test failed in the full run and passed in
+ * isolation, on the same commit. Waiting for the condition instead is both
+ * faster when the machine is idle and reliable when it is not; the ceiling is
+ * generous because it is only reached when something is genuinely wrong.
+ */
+async function settleUntil(
+  telemetry: { drain: (quietMs?: number) => Promise<void> },
+  done: () => boolean,
+  ceilingMs = 15_000,
+): Promise<void> {
+  const deadline = Date.now() + ceilingMs;
+  do {
+    await telemetry.drain(150);
+  } while (!done() && Date.now() < deadline);
+  // One further pass, so an event published during the last check is included.
+  await telemetry.drain(150);
+}
+
 describe("preconditions", () => {
   it("has a Chrome to drive, which is mandatory in CI", () => {
     if (CI) expect(chrome.found, "no Chrome in CI; these tests must not be skipped").toBe(true);
@@ -94,7 +122,11 @@ describe("WebSocket", () => {
     try {
       const page = await (session as BrowserSession).browser.newPage();
       await page.goto(`${fixture?.origin ?? ""}/`, { waitUntil: "load" });
-      await telemetry.drain(600);
+      // The fixture closes the socket when it is done, so the close event is
+      // the exchange's own terminal signal — nothing else has to be guessed.
+      await settleUntil(telemetry, () =>
+        seen.some((envelope) => envelope.type === "websocket_closed"),
+      );
       await page.close();
     } finally {
       await telemetry.detach();
@@ -252,7 +284,7 @@ describe("EventSource", () => {
     try {
       const page = await (session as BrowserSession).browser.newPage();
       await page.goto(`${fixture?.origin ?? ""}/`, { waitUntil: "load" });
-      await telemetry.drain(600);
+      await settleUntil(telemetry, () => payloadsOf(seen, "eventsource_message").length >= 4);
 
       const messages = payloadsOf<EventSourceMessagePayload>(seen, "eventsource_message");
       expect(messages.length).toBeGreaterThanOrEqual(4);
@@ -289,7 +321,7 @@ describe("EventSource", () => {
     try {
       const page = await (session as BrowserSession).browser.newPage();
       await page.goto(`${fixture?.origin ?? ""}/`, { waitUntil: "load" });
-      await telemetry.drain(600);
+      await settleUntil(telemetry, () => payloadsOf(seen, "eventsource_message").length >= 4);
 
       const messages = payloadsOf<EventSourceMessagePayload>(seen, "eventsource_message");
       expect(messages.some((message) => message.data?.includes("keepalive") === true)).toBe(
