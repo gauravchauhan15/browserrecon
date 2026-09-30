@@ -50,7 +50,7 @@ jobs:
         # early rather than at an upgrade deadline.
         node: ["22", "24"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -101,7 +101,7 @@ jobs:
     name: milestone gate (browser, headless)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -128,7 +128,7 @@ jobs:
     name: secret scan (full history)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history, not a shallow clone: making the repository public
           # exposes every commit ever made, so a secret in an old commit is
@@ -170,7 +170,7 @@ jobs:
     name: license allowlist
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -188,7 +188,7 @@ jobs:
     name: clean install (fresh machine)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -227,7 +227,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Review added or changed dependencies
         uses: actions/dependency-review-action@v4
         with:
