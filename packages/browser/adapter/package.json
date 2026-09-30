@@ -21,7 +21,7 @@
     "@browserrecon/browser-manager": "workspace:*",
     "@browserrecon/core": "workspace:*",
     "@browserrecon/policy": "workspace:*",
-    "puppeteer-core": "^25.10.0"
+    "puppeteer-core": "^25.12.0"
   },
   "devDependencies": {
     "@browserrecon/fixtures": "workspace:*"
