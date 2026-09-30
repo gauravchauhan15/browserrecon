@@ -1,0 +1,55 @@
+name: False positive or wrong inference
+description: A workflow that is not real, a dependency that does not exist, a gap reason that is wrong
+labels: [false-positive]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        These are the most useful reports this project receives. Workflow
+        detection, `depends_on` edges and coverage reasoning are tuned against
+        real applications, and real applications are how they improve.
+
+        **Redact before posting.** `report.md` is redacted by default;
+        `.output/` is not.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What was wrong
+      options:
+        - A workflow that is not a real workflow
+        - Two unrelated requests joined into one workflow
+        - One real workflow split into several
+        - A depends_on or caused_by edge that does not exist
+        - A request classified with the wrong role
+        - A coverage gap with the wrong reason or remedy
+        - A WebMCP tool reported incorrectly
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What the tool said
+      description: Paste the relevant part of `report.md` or `surface.json`.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: truth
+    attributes:
+      label: What is actually true
+      description: What the application really does, as far as you can describe it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: shape
+    attributes:
+      label: Anything about the application that might explain it
+      description: |
+        A shared fetch wrapper, a heavy polling endpoint, an unusual router, a
+        framework that does something distinctive. These are the details that
+        usually turn out to be the cause.

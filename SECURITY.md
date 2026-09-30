@@ -37,7 +37,8 @@ issues that matter most are about **containment**:
 - **`.output/` contains unredacted data.** The event store is deliberately raw
   and local-only; it is the evidence base that correlation depends on.
   Redaction applies at the boundaries that leave the machine — reports,
-  exports, and model prompts. This is documented in the build plan §37.2.
+  exports, and model prompts. See [§37.2 in the spec map](docs/architecture/spec-map.md) for what that
+  section requires.
 - **The tool sends requests to the target you point it at.** That is its
   function. Scanning without authorization is a misuse problem, not a tool
   defect.

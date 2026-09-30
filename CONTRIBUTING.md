@@ -1,5 +1,7 @@
 # Contributing to BrowserRecon
 
+By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Issues are very welcome
 
 Bug reports, feature ideas, questions, and especially **false-positive reports**

@@ -1,0 +1,61 @@
+name: Bug report
+description: Something did not work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before you paste anything:** `.output/` deliberately contains raw
+        unredacted data — cookies, tokens, authorization headers and request
+        bodies. Never paste it into a public issue. `report.md` is redacted by
+        default and is usually the safe thing to share.
+
+        For a security problem in BrowserRecon itself, use
+        [private reporting](https://github.com/gauravchauhan15/browserrecon/security/advisories/new)
+        instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: The command you ran
+      render: shell
+      placeholder: node apps/cli/bin/browserrecon.js scan https://... --max-pages 10
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output
+      description: The terminal summary, or the section of `report.md` that is wrong. Redact first.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `browserrecon version`, or the commit SHA.
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS, Node and Chrome versions
+      placeholder: macOS 15.3, Node 22.12.0, Chrome 131
+
+  - type: textarea
+    id: target
+    attributes:
+      label: What kind of application was the target
+      description: |
+        SPA or server-rendered, authenticated or not, heavy on third parties —
+        this usually explains more than the files do. No need to name it.

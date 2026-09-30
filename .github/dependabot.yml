@@ -1,0 +1,31 @@
+# Dependency updates.
+#
+# Grouped and monthly on purpose. Every dependency change is a supply-chain
+# event that CONTRIBUTING.md says must be reviewed rather than waved through,
+# and a daily stream of individual PRs is how review becomes rubber-stamping.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      dev-tooling:
+        patterns:
+          - "@types/*"
+          - "eslint*"
+          - "typescript*"
+          - "prettier"
+          - "vitest"
+          - "@vitest/*"
+    commit-message:
+      prefix: "chore"
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore"

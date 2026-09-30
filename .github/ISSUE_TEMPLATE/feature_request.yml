@@ -1,0 +1,34 @@
+name: Feature or improvement
+description: Something BrowserRecon should do that it does not
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth checking the README's **Current status** table first — V4–V6
+        (the AI layers) are planned but not built, and several flags parse
+        today without doing anything.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to find out about an application that you cannot today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: Optional. The problem is more useful than the solution.
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This does not involve bypassing a security control (CAPTCHA, WAF, bot detection, authentication or MFA), which is out of scope by design.
+          required: true
+        - label: This does not involve active exploitation or destructive testing.
+          required: true

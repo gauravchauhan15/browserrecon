@@ -5,7 +5,13 @@ node_modules/
 # Build output
 dist/
 *.tsbuildinfo
-coverage/
+# Root-anchored, and it has to stay that way. An unanchored `coverage/`
+# matches at any depth, which silently excluded the whole `packages/coverage`
+# source package: ten files and 1,529 lines that were never committed, so a
+# fresh clone did not build. vitest writes its report to the repo root
+# (`reportsDirectory: "coverage"` in vitest.config.ts), so one leading slash
+# is both sufficient and exact.
+/coverage/
 
 # ---------------------------------------------------------------------------
 # Scan output — CONTAINS UNREDACTED CAPTURED DATA (see build plan §37.2).
@@ -17,6 +23,12 @@ coverage/
 *.jsonl
 !fixtures/**/*.jsonl
 !tests/**/fixtures/**/*.jsonl
+# The committed reference samples, which are fixture traffic against
+# 127.0.0.1 and contain nothing captured from a real target. Narrow on
+# purpose: an exact filename under an exact directory, neither of which a
+# scan ever writes to — a session writes `events-NNNN.jsonl` into its own
+# output directory, which the blanket rule above still catches.
+!docs/samples/**/events.head.jsonl
 
 # Secrets and local config
 .env
