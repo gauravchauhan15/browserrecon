@@ -37,6 +37,28 @@ for §10B.9: a 20 MB bundle would want ~560 MB. It is the argument for the
 maximum-asset-size cap and the bounded worker, not a reason to reject the
 parser.
 
+### That 28× is one sample, not a constant
+
+Treat it as an order of magnitude and nothing more. Re-measuring the identical
+parse four times in one process gives **+81.5×, +30.3×, −27.9× and +26.4×** —
+the third being a parse during which resident memory _fell_. RSS is a
+process-wide counter that the allocator and the garbage collector move
+independently of the call being measured, and on Linux glibc holds freed pages
+in its arenas rather than returning them to the OS.
+
+`heapUsed` is no better, which is worth stating because it looks like it should
+be. With 1.5 million AST nodes deliberately retained — a simulated regression
+to a pure-JS parser — three runs reported **+82.4 MiB, −5.7 MiB and −3.0 MiB**.
+A collection inside the measurement window makes the delta negative whatever is
+being held alive.
+
+A memory assertion built on either counter therefore passes when the regression
+is present and fails when nothing is wrong. One existed, bounding RSS at 100× the
+source; it failed in CI at 106× and was removed rather than loosened. The
+protection §10B.9 actually relies on is the maximum-asset-size gate, which is
+deterministic and covered by five tests in `pipeline.test.ts` — disabling the
+gate fails all five.
+
 ## Why tree-sitter, given acorn is smaller and comparably fast
 
 Error tolerance, and one category of it in particular.

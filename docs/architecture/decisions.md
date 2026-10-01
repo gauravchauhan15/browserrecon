@@ -259,3 +259,39 @@ lesson is about the first fix rather than the second: narrowing from "the
 file" to "the top frame" felt like the fix because it made the failing case
 pass. It addressed one instance of "the shared prefix is not the call site",
 not the class.
+
+### Three flakes, one mistake (BR-M3-12, release prep)
+
+Preparing the repository for public release surfaced three failing-at-random
+tests in a week. They look unrelated and are the same error:
+
+- `spike.bench.test.ts` bounded tree-sitter at ten seconds of **wall clock**.
+  It failed at 50.5 s in the full suite and passed at 3.6 s alone, on one
+  laptop, on one commit — the suite runs several headless Chromes beside it.
+- `realtime-domain.test.ts` waited a fixed `drain(600)` for a browser to
+  complete a WebSocket exchange, then asserted. Fine idle, not fine under load.
+- `spike.bench.test.ts` again, bounding **RSS growth** at 100× the source size.
+  Failed in CI at 106×.
+
+Each asserted a number derived from the environment as though it measured the
+code. The fixes differ because the right answer differs: the first measures CPU
+time, which is the parser's own cost; the second waits for the exchange's
+terminal event instead of a duration; the third was **deleted**.
+
+Deleting is the part worth recording. The obvious move was to loosen the bound
+to 300×, and it would have been wrong. Measuring the identical parse four times
+gives +81.5×, +30.3×, −27.9× and +26.4× — a parse during which resident memory
+fell. Switching the assertion to `heapUsed` looked like the principled fix and
+is not: with 1.5 million AST nodes deliberately retained, three runs reported
++82.4 MiB, −5.7 MiB and −3.0 MiB, because a collection inside the window makes
+the delta negative whatever is held. The assertion passed with the regression
+present.
+
+**A test that passes when the defect is there is worse than no test**, because
+it also costs CI time and teaches people to re-run until green. What actually
+bounds memory is the maximum-asset-size gate, which is deterministic; disabling
+it fails five tests. The spike measurement stays in `js-analysis-spike.md`,
+labelled as the single sample it always was.
+
+The general rule: before asserting on a measured number, measure it more than
+once. If the samples do not agree, the assertion is about the machine.

@@ -19,6 +19,34 @@ import { createTreeSitterAnalyzer } from "./index.js";
  * The thresholds are deliberately loose. This asserts "the parser copes with
  * a real bundle at a sane cost", not a benchmark number: a tight bound would
  * fail on a loaded CI runner and teach everyone to ignore it.
+ *
+ * ## There is no memory assertion here, deliberately
+ *
+ * There was one, bounding RSS growth at 100x the source size. It failed in CI
+ * at 106x. Measuring the same parse four times in one process gives +81.5x,
+ * +30.3x, **-27.9x** and +26.4x — a parse during which resident memory fell.
+ * RSS is a process-wide counter moved by the allocator and the collector
+ * independently of the call being measured, and on Linux glibc holds freed
+ * pages in its arenas rather than returning them.
+ *
+ * Switching to `heapUsed` was no better, which is worth recording because it
+ * looks like it should be. With 1.5 million AST nodes deliberately retained —
+ * a simulated regression to a pure-JS parser, the exact thing such a test
+ * exists to catch — three runs reported +82.4 MiB, **-5.7 MiB** and
+ * **-3.0 MiB**. A garbage collection inside the measurement window makes the
+ * delta negative whatever is being held. The assertion passed with the
+ * regression present, which is worse than having no assertion at all.
+ *
+ * No single-sample delta of either counter can carry this. Making one sound
+ * would need forced collection under `--expose-gc` and retained-size rather
+ * than delta — a test-runner-wide flag for a property that is already
+ * protected elsewhere.
+ *
+ * What actually bounds memory is §10B.9's maximum-asset-size gate, and that
+ * is tested deterministically in `pipeline.test.ts` ("counts what it refused,
+ * by reason"). The one-off spike measurement, and why a V8 heap ceiling does
+ * not bound a native parser, are recorded in
+ * `docs/architecture/js-analysis-spike.md`.
  */
 
 const require = createRequire(import.meta.url);
@@ -101,30 +129,6 @@ describe("BR-M2-05: tree-sitter on a real minified bundle", () => {
       // could not read. Prettier's bundles carry plenty of path-shaped
       // strings; zero findings would mean the walk is broken.
       expect(result.urls.length + result.routes.length).toBeGreaterThan(0);
-    },
-    120_000,
-  );
-
-  spikeTest(
-    "does not hold memory proportional to nothing",
-    () => {
-      // The spike measured RSS growing to ~28x the source size, which is the
-      // argument for §10B.9's maximum-asset-size cap. This pins the order of
-      // magnitude so a regression to, say, 200x is visible.
-      const analyzer = createTreeSitterAnalyzer();
-      const before = process.memoryUsage().rss;
-      const result = analyzer.analyze({
-        script: "spike.js",
-        source: source as string,
-        timeBudgetMs: 60_000,
-      });
-      const grew = process.memoryUsage().rss - before;
-
-      expect(result.status).toBe("complete");
-      expect(
-        grew,
-        `rss grew ${(grew / 1024 / 1024).toFixed(0)} MiB for ${(result.bytes / 1024 / 1024).toFixed(1)} MiB of source`,
-      ).toBeLessThan(result.bytes * 100);
     },
     120_000,
   );
