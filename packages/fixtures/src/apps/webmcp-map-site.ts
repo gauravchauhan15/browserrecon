@@ -64,6 +64,24 @@ export const WEBMCP_MAP_TOOLS = [
     },
     annotations: { readOnlyHint: false, destructiveHint: true },
   },
+  // `readOnlyHint: false` with no destructive hint. MCP means "may modify
+  // its environment", which covers a navigation helper — observed on
+  // the reference application as `a navigation helper`. Reporting this identically to
+  // `cancel-order` is the false alarm that teaches a reader to discount the
+  // real ones, so the two are kept apart and this fixture proves it.
+  {
+    name: "navigate-to-city",
+    description: "Move the page to a city listing.",
+    inputSchema: { type: "object", properties: { city: { type: "string" } } },
+    annotations: { readOnlyHint: false },
+  },
+  // No annotations at all — observed on a second WebMCP site, where every tool
+  // omits them. Must read as "unstated", never as "read-only".
+  {
+    name: "list-guides",
+    description: "List published buying guides.",
+    inputSchema: { type: "object", properties: {} },
+  },
 ] as const;
 
 function shell(): FixtureResponse {
@@ -82,13 +100,31 @@ function shell(): FixtureResponse {
       "    tools: new Map(),",
       "    registrations: new Set(),",
       "  };",
+      // Two shapes in one registry, because three real sites disagreed:
+      // a router admin UI wraps the descriptor under `item` with the schema also as
+      // text; the reference application and a second WebMCP site store it flat with an `outputSchema`
+      // beside it. An adapter that handles one and not the other is broken
+      // against half the web, so both are registered here and the gate
+      // asserts every tool is found.
+      "  let wrapNext = true;",
       "  navigator.modelContext.registerTool = function (descriptor) {",
-      "    this.tools.set(descriptor.name, {",
-      "      item: descriptor,",
-      "      registeredInputSchema: JSON.stringify(descriptor.inputSchema),",
-      "      execute: async () => ({ ok: true }),",
-      "      mcpHandle: {},",
-      "    });",
+      "    const wrapped = wrapNext;",
+      "    wrapNext = !wrapNext;",
+      "    this.tools.set(",
+      "      descriptor.name,",
+      "      wrapped",
+      "        ? {",
+      "            item: descriptor,",
+      "            registeredInputSchema: JSON.stringify(descriptor.inputSchema),",
+      "            execute: async () => ({ ok: true }),",
+      "            mcpHandle: {},",
+      "          }",
+      "        : {",
+      "            ...descriptor,",
+      "            outputSchema: { type: 'object', properties: { ok: { type: 'boolean' } } },",
+      "            execute: async () => ({ ok: true }),",
+      "          },",
+      "    );",
       "  };",
       "  navigator.modelContext.getTools = function () { return this.tools; };",
       `  for (const tool of ${JSON.stringify(WEBMCP_MAP_TOOLS)}) {`,
