@@ -11,6 +11,9 @@
       "path": "../../packages/attack-surface"
     },
     {
+      "path": "../../packages/auth"
+    },
+    {
       "path": "../../packages/authorization"
     },
     {

@@ -128,6 +128,11 @@ the engine has not been wired to yet. These parse and are then ignored:
 `--model`, `--ai-endpoint`. `resume` validates a session and then reports that
 the engine behind it is not built. `agent` is not implemented.
 
+`--auth-profile` **does** work: a scan can sign in, and everything observed
+afterwards is labelled with that identity. `auth list` and `auth validate`
+remain unimplemented — the profile goes to `scan` directly. See
+[docs/testing.md](docs/testing.md).
+
 What each milestone gate proved — and, at more length, what it did not — is
 written down in [docs/architecture/](docs/architecture/).
 

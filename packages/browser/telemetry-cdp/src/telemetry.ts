@@ -67,6 +67,14 @@ export interface Telemetry {
    * long counts as idle.
    */
   drain(quietMs?: number): Promise<void>;
+  /**
+   * Change the identity recorded on subsequent events.
+   *
+   * Called when a login succeeds, and again if the session is lost. Events
+   * already published keep the context they were observed under — rewriting
+   * them would be falsifying the record.
+   */
+  setAuthContext(authContext: string): void;
   /** Stop observing. Detaches from every target and leaves the browser alone. */
   detach(): Promise<void>;
 }
@@ -204,6 +212,9 @@ export async function attachTelemetry(options: TelemetryOptions): Promise<Teleme
         eventSourceMessages: counters.eventSourceMessages,
         attachedTargets: sessions.size,
       };
+    },
+    setAuthContext: (authContext: string) => {
+      ctx.authContext = authContext;
     },
     drain: async (quietMs = 250) => {
       // Bounded, so a page that polls forever cannot hang the caller.

@@ -39,6 +39,9 @@
     },
     {
       "path": "../../../packages/rate-controller"
+    },
+    {
+      "path": "../../auth"
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir, platform } from "node:os";
 import { join } from "node:path";
@@ -33,6 +33,9 @@ import {
   parallelSite,
   webmcpSite,
   webmcpMapSite,
+  authenticatedSite,
+  ACCOUNT,
+  PROTECTED_PATHS,
   WEBMCP_TOOLS,
   WEBMCP_MAP_TOOLS,
   startFixture,
@@ -492,6 +495,195 @@ describe("V3: the five §18.1 false-positive controls", () => {
       }
     },
     180_000,
+  );
+});
+
+/**
+ * Signing in — §12.1, §12.3, §12.4.
+ *
+ * Until this existed, `packages/auth` had been complete and unreachable for
+ * two milestones: `auth list` said "not implemented", `scan` had no flag, no
+ * fixture had a login form, and every observation the tool had ever recorded
+ * was `anonymous`. Four gaps, one missing wire.
+ */
+describe("V3: a scan can sign in, and says which identity it used", () => {
+  const profileFor = (fixture: RunningFixture, directory: string): string => {
+    const path = join(directory, "profile.json");
+    // §12.1: the file names environment variables and holds no secret. A
+    // profile with a password in it does not parse, by design.
+    writeFileSync(
+      path,
+      JSON.stringify({
+        name: "customer",
+        login: { url: `${fixture.origin}/login` },
+        credentials: { usernameEnv: "BR_GATE_USER", passwordEnv: "BR_GATE_PASS" },
+        successCondition: { selectorPresent: "#signed-in-marker" },
+      }),
+    );
+    return path;
+  };
+
+  gateTest(
+    "reaches what is behind the login, and labels it with the identity",
+    async () => {
+      const fixture = await startFixture(authenticatedSite());
+      const outputRoot = mkdtempSync(join(tmpdir(), "br-auth-"));
+      try {
+        const warnings: string[] = [];
+        const code = await run({
+          argv: [
+            "scan",
+            fixture.origin,
+            "--i-am-authorized",
+            "--no-deny-loopback",
+            "--allowed-origins",
+            fixture.origin,
+            "--out",
+            outputRoot,
+            "--max-pages",
+            "8",
+            "--auth-profile",
+            profileFor(fixture, outputRoot),
+          ],
+          io: {
+            out: () => {},
+            err: (line) => warnings.push(line),
+            env: { BR_GATE_USER: ACCOUNT.email, BR_GATE_PASS: ACCOUNT.password },
+            version: "0.1.0-gate",
+          },
+        });
+        expect(code).toBe(0);
+        expect(warnings.join("\n")).toContain('Signed in as "customer"');
+
+        const sessionDir = join(
+          outputRoot,
+          readdirSync(outputRoot).filter((name) => name.startsWith("sess_"))[0] ?? "missing",
+        );
+        const events = await readAllEvents(sessionDir);
+
+        // §12.3: the identity is on the events, and it changes when the
+        // login lands. Observations made before it keep `anonymous` — they
+        // were made anonymously, and rewriting them would falsify the log.
+        const contexts = new Set(events.map((envelope) => envelope.auth_context));
+        expect(contexts).toEqual(new Set(["anonymous", "customer"]));
+
+        // The proof the session was real: these paths 404 when signed out.
+        const reached = new Set(fixture.requests.map((request) => request.pathname));
+        for (const path of PROTECTED_PATHS) {
+          expect(reached.has(path), `${path} was never reached`).toBe(true);
+        }
+
+        expect(readFileSync(join(sessionDir, "report.md"), "utf8")).toContain(
+          "| Auth state | customer |",
+        );
+      } finally {
+        await fixture.close();
+      }
+    },
+    240_000,
+  );
+
+  gateTest(
+    "submits the login form and nothing else, ever",
+    async () => {
+      // The exemption §12.1 needed is narrow, and this is the assertion that
+      // keeps it narrow: the server's own record shows exactly one
+      // state-changing request, the login. Two independent guards produce
+      // that — `decideControl` refuses state-changing controls during
+      // browsing, and the policy window closes after the login — and this
+      // checks the outcome rather than either mechanism.
+      const fixture = await startFixture(authenticatedSite());
+      const outputRoot = mkdtempSync(join(tmpdir(), "br-auth2-"));
+      try {
+        await run({
+          argv: [
+            "scan",
+            fixture.origin,
+            "--i-am-authorized",
+            "--no-deny-loopback",
+            "--allowed-origins",
+            fixture.origin,
+            "--out",
+            outputRoot,
+            "--max-pages",
+            "8",
+            "--auth-profile",
+            profileFor(fixture, outputRoot),
+          ],
+          io: {
+            out: () => {},
+            err: () => {},
+            env: { BR_GATE_USER: ACCOUNT.email, BR_GATE_PASS: ACCOUNT.password },
+            version: "0.1.0-gate",
+          },
+        });
+
+        expect(
+          fixture.requests
+            .filter((request) => request.method !== "GET")
+            .map((request) => `${request.method} ${request.pathname}`),
+          "something other than the login was submitted",
+        ).toEqual(["POST /login"]);
+      } finally {
+        await fixture.close();
+      }
+    },
+    240_000,
+  );
+
+  gateTest(
+    "reports a failed login as a barrier rather than describing a smaller app",
+    async () => {
+      // §45, and the most misleading output this tool could produce: a
+      // report that quietly describes the anonymous surface of an
+      // application the user meant to scan signed in.
+      const fixture = await startFixture(authenticatedSite());
+      const outputRoot = mkdtempSync(join(tmpdir(), "br-auth3-"));
+      try {
+        const warnings: string[] = [];
+        const code = await run({
+          argv: [
+            "scan",
+            fixture.origin,
+            "--i-am-authorized",
+            "--no-deny-loopback",
+            "--allowed-origins",
+            fixture.origin,
+            "--out",
+            outputRoot,
+            "--max-pages",
+            "4",
+            "--auth-profile",
+            profileFor(fixture, outputRoot),
+          ],
+          io: {
+            out: () => {},
+            err: (line) => warnings.push(line),
+            // The right username, the wrong password. The fixture answers
+            // with 200 and the form still on the page, which is how most
+            // applications say no.
+            env: { BR_GATE_USER: ACCOUNT.email, BR_GATE_PASS: "not-the-password" },
+            version: "0.1.0-gate",
+          },
+        });
+
+        // A scan that could not sign in is a scan with less coverage, not a
+        // crashed scan.
+        expect(code).toBe(0);
+        expect(warnings.join("\n")).toMatch(/could not sign in/i);
+
+        const sessionDir = join(
+          outputRoot,
+          readdirSync(outputRoot).filter((name) => name.startsWith("sess_"))[0] ?? "missing",
+        );
+        const report = readFileSync(join(sessionDir, "report.md"), "utf8");
+        expect(report).toContain("| Auth state | anonymous |");
+        expect(section(report, "Access barriers")).toContain("authentication");
+      } finally {
+        await fixture.close();
+      }
+    },
+    240_000,
   );
 });
 

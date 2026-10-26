@@ -43,6 +43,8 @@ import { PolicyEngine } from "@browserrecon/policy";
 import type { TargetPolicy } from "@browserrecon/policy";
 import type { TokenBucket } from "@browserrecon/rate-controller";
 import { decideControl, type ControlOutcome } from "./interact.js";
+import { login, type LoginOutcome } from "./login.js";
+import type { AuthProfile, Secrets } from "@browserrecon/auth";
 import { attachTelemetry, type Telemetry } from "@browserrecon/telemetry-cdp";
 
 /** Raised when the browser itself has died, as opposed to one page failing. */
@@ -109,6 +111,17 @@ const INTERACTION_SETTLE_MS = 1_000;
 
 export interface Runner {
   launch(): Promise<void>;
+  /**
+   * Sign in before browsing — §12.1, §12.3.
+   *
+   * Separate from `visit` because it happens once, before the queue starts,
+   * and because a failure here is not a failed page: the scan continues
+   * unauthenticated and the report says which identity it actually used.
+   */
+  signIn(input: {
+    readonly profile: AuthProfile;
+    readonly secrets: Secrets;
+  }): Promise<LoginOutcome>;
   visit(context: {
     readonly candidate: Candidate;
     readonly bucket: TokenBucket;
@@ -441,6 +454,39 @@ export function createRunner(options: RunnerOptions): Runner {
         requests: 1,
         forms: page.forms,
       };
+    },
+
+    async signIn({ profile, secrets }) {
+      const driver = recording ?? adapter;
+      const currentTelemetry = telemetry;
+      if (driver === undefined || currentTelemetry === undefined) {
+        throw new RunnerBrowserCrash("the browser is not running");
+      }
+
+      // Opened here, closed in `finally` so a throw cannot leave it open.
+      //
+      // Measured, not assumed: deliberately never closing it does *not* let
+      // the browsing phase submit a form, because `decideControl` refuses a
+      // state-changing control on its own, before the policy is consulted.
+      // So this is the second of two independent guards rather than the one
+      // holding the line — which is the right number, and worth stating
+      // because a reader would otherwise assume this `finally` is what makes
+      // the exemption safe. The engine-level behaviour is pinned by
+      // `engine.test.ts`; what makes it safe *here* is both layers.
+      engine.beginAuthentication(profile.login.url);
+      let outcome: LoginOutcome;
+      try {
+        outcome = await login({ adapter: driver, profile, secrets, logger: log });
+      } finally {
+        engine.endAuthentication();
+      }
+      if (outcome.status === "authenticated") {
+        // Everything observed from here carries the new identity. Events
+        // already written keep `anonymous`, which is what they were observed
+        // under — rewriting them would falsify the record.
+        currentTelemetry.setAuthContext(outcome.authContext);
+      }
+      return outcome;
     },
 
     close: teardown,

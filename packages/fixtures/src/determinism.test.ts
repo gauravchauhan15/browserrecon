@@ -121,6 +121,12 @@ const PROBE_PATHS: Readonly<Record<string, readonly [string, string][]>> = {
     ["GET", "/api/orders/8f14e45fceea167a5a36dedd4bea2543"],
     ["GET", "/api/orders/8f14e45fceea167a5a36dedd4bea2543/receipt"],
   ],
+  "authenticated-site": [
+    ["GET", "/"],
+    ["GET", "/login"],
+    ["GET", "/account"],
+    ["GET", "/api/account/profile"],
+  ],
   "webmcp-map-site": [
     ["GET", "/"],
     ["GET", "/api/products/search"],

@@ -353,3 +353,51 @@ describe("engine construction", () => {
     expect(policy.targetOrigin).toBe(TARGET);
   });
 });
+
+describe("the authentication window", () => {
+  /**
+   * §12.1's one exemption. Narrow by construction, so the test is mostly
+   * about what it does *not* permit.
+   */
+  // The default policy is read-only, which is the case that matters.
+  const readOnly = (): PolicyEngine => engineWith();
+
+  const submit = (engine: PolicyEngine, url: string) =>
+    engine.canAct({ kind: "click", url, stateChanging: true });
+
+  it("refuses a state-changing click when no login is in progress", () => {
+    expect(submit(readOnly(), "https://shop.example.com/login").allowed).toBe(false);
+  });
+
+  it("permits one on the login origin while a login is in progress", () => {
+    // Without this the whole authentication feature is dead: submitting a
+    // login form changes state, so a read-only policy forbids it. That is
+    // exactly what kept `packages/auth` unreachable for two milestones.
+    const engine = readOnly();
+    engine.beginAuthentication("https://shop.example.com/login");
+    expect(submit(engine, "https://shop.example.com/login").allowed).toBe(true);
+  });
+
+  it("still refuses one on any other origin", () => {
+    // The exemption is for the form the user named, not for the scan.
+    const engine = readOnly();
+    engine.beginAuthentication("https://shop.example.com/login");
+    expect(submit(engine, "https://evil.example.com/login").allowed).toBe(false);
+  });
+
+  it("refuses again once the login is over", () => {
+    const engine = readOnly();
+    engine.beginAuthentication("https://shop.example.com/login");
+    engine.endAuthentication();
+    expect(submit(engine, "https://shop.example.com/login").allowed).toBe(false);
+  });
+
+  it("does not open the window for a scan that never asked to sign in", () => {
+    // The default. A profile is the user pointing at a form and saying
+    // "submit this one"; without one, nothing is submitted anywhere.
+    const engine = readOnly();
+    for (const url of ["https://shop.example.com/", "https://shop.example.com/login"]) {
+      expect(submit(engine, url).allowed, url).toBe(false);
+    }
+  });
+});

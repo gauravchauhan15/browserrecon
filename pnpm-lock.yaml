@@ -136,6 +136,9 @@ importers:
       '@browserrecon/attack-surface':
         specifier: workspace:*
         version: link:../../packages/attack-surface
+      '@browserrecon/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@browserrecon/authorization':
         specifier: workspace:*
         version: link:../../packages/authorization
@@ -184,6 +187,9 @@ importers:
       commander:
         specifier: ^15.0.0
         version: 15.0.0
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
 
   packages/api-model:
     dependencies:
@@ -297,6 +303,9 @@ importers:
 
   packages/browser/runner:
     dependencies:
+      '@browserrecon/auth':
+        specifier: workspace:*
+        version: link:../../auth
       '@browserrecon/browser-adapter':
         specifier: workspace:*
         version: link:../adapter

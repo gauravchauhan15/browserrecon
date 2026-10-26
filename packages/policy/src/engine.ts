@@ -174,7 +174,20 @@ const PERMITTED_ACTION_SET: ReadonlySet<string> = new Set(PERMITTED_ACTIONS);
  * literals. `checkResolvedHost` adds the DNS layer and is therefore async —
  * see the note on its limits.
  */
+/** Same origin, with an unparseable URL counting as "no". */
+function sameOrigin(url: string | undefined, other: string): boolean {
+  if (url === undefined) return false;
+  try {
+    return new URL(url).origin === new URL(other).origin;
+  } catch {
+    return false;
+  }
+}
+
 export class PolicyEngine {
+  /** The login origin, while a sign-in is in progress. See below. */
+  #authenticatingAt: string | undefined;
+
   constructor(readonly policy: TargetPolicy) {}
 
   /** Whether an origin is in scope. */
@@ -274,6 +287,23 @@ export class PolicyEngine {
   }
 
   /** Whether an explorer may take an action. */
+  /**
+   * Permit the state-changing actions a sign-in needs, on one origin only.
+   *
+   * Opened and closed by the runner around `login()`. Not a policy setting:
+   * a user can turn `stateChangingActions` on in their configuration and
+   * accept what that means everywhere, but this is a narrower thing — the
+   * single form they explicitly named.
+   */
+  beginAuthentication(loginUrl: string): void {
+    this.#authenticatingAt = loginUrl;
+  }
+
+  /** Close the window. Called in a `finally`, including when login throws. */
+  endAuthentication(): void {
+    this.#authenticatingAt = undefined;
+  }
+
   canAct(action: ProposedAction): Decision {
     if (!PERMITTED_ACTION_SET.has(action.kind)) {
       return deny(
@@ -283,10 +313,29 @@ export class PolicyEngine {
     }
 
     if (action.stateChanging === true && !this.policy.agent.stateChangingActions) {
-      return deny(
-        "action_state_changing_denied",
-        `${action.kind} changes application state, which this policy does not permit`,
-      );
+      // §12.1's one exception, and it is deliberately narrow. Submitting a
+      // login form changes state, so a read-only policy forbids it and the
+      // whole authentication feature is dead — which is exactly what
+      // happened: `packages/auth` was complete and untouched for two
+      // milestones, and every observation the tool ever made was anonymous.
+      //
+      // The exemption is bounded three ways rather than one:
+      //
+      //  1. **In time.** The window is opened immediately before the login
+      //     and closed immediately after, by the runner, in a `finally`.
+      //     Nothing else drives the browser while it is open.
+      //  2. **By origin.** Only the origin of the login URL the user named.
+      //  3. **By intent.** It only opens when the user supplied a profile,
+      //     which is them pointing at a form and saying "submit this one".
+      //
+      // §7.2 is unchanged for everything else: forms are still reported and
+      // never submitted, including on this origin once the window closes.
+      if (!this.#authenticatingAt || !sameOrigin(action.url, this.#authenticatingAt)) {
+        return deny(
+          "action_state_changing_denied",
+          `${action.kind} changes application state, which this policy does not permit`,
+        );
+      }
     }
 
     if (action.url !== undefined) {

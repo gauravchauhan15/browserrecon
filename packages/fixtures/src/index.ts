@@ -37,6 +37,12 @@ export { BEACON_PATHS, FIRST_PARTY_API, VENDOR_SCRIPTS, noisySite } from "./apps
 export type { NoisySiteOptions } from "./apps/noisy-site.js";
 export { WEBMCP_TOOLS, webmcpSite } from "./apps/webmcp-site.js";
 export { WEBMCP_MAP_TOOLS, webmcpMapSite } from "./apps/webmcp-map-site.js";
+export {
+  ACCOUNT,
+  PROTECTED_PATHS,
+  SESSION_COOKIE,
+  authenticatedSite,
+} from "./apps/authenticated-site.js";
 export { ORDER_ID, PARALLEL_PATHS, parallelSite } from "./apps/parallel-site.js";
 
 export { OPCODES, decodeFrame, encodeFrame, handshakeAccept } from "./websocket.js";
@@ -54,6 +60,7 @@ import { staticSite } from "./apps/static-site.js";
 import { throttledApi } from "./apps/throttled-api.js";
 import { webmcpSite } from "./apps/webmcp-site.js";
 import { webmcpMapSite } from "./apps/webmcp-map-site.js";
+import { authenticatedSite } from "./apps/authenticated-site.js";
 import type { FixtureApp } from "./types.js";
 
 /**
@@ -77,5 +84,6 @@ export const ALL_FIXTURE_APPS: readonly (() => FixtureApp)[] = [
   noisySite,
   webmcpSite,
   webmcpMapSite,
+  authenticatedSite,
   parallelSite,
 ];
