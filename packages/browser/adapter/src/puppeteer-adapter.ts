@@ -241,10 +241,22 @@ function readHarvest(): Omit<PageHarvest, "url"> {
   /**
    * WebMCP registries — build plan §21.
    *
-   * The spec is young, so this reads a short list of shapes rather than one,
-   * records which registry answered, and treats anything it does not
-   * recognise as absence. Almost no site has this: a collector that warned
-   * or explained itself here would be noise on every scan.
+   * The spec is young and implementations disagree, so this normalises rather
+   * than assuming. The first real site it met got **nothing**: it read
+   * `tools` with `Array.isArray`, and a production registry exposes a `Map`
+   * keyed by tool name whose values are wrappers — the descriptor lives under
+   * `item`. Four tools were there and the scan reported none, silently,
+   * because absence is the normal case for WebMCP and nothing distinguished
+   * "not present" from "present and unreadable".
+   *
+   * So: every plausible container, the descriptor either bare or wrapped, the
+   * name from the key when the descriptor has none, and the schema whether it
+   * arrives as an object or as JSON text.
+   *
+   * `getTools()` is deliberately not used. It looked like the right thing —
+   * a public API ages better than internals — but the one implementation
+   * measured returns a Map from it too, so it buys nothing and adds a call
+   * into page code. Nothing here ever touches `executeTool` (§7.2).
    *
    * Bounded deliberately. A page controls what is in its registry, and a
    * thousand tools with megabyte schemas would otherwise be serialised
@@ -258,45 +270,92 @@ function readHarvest(): Omit<PageHarvest, "url"> {
     ["window.agent", (window as unknown as Record<string, unknown>).agent],
   ];
 
-  const webmcpTools: HarvestedWebMcpTool[] = [];
-  const named = new Set<string>();
-  for (const [registry, value] of registries) {
-    const tools = (value as { tools?: unknown } | undefined)?.tools;
-    if (!Array.isArray(tools)) continue;
+  /** Any container the `tools` property might be, as key/value pairs. */
+  const entriesOf = (tools: unknown): [unknown, unknown][] => {
+    if (tools instanceof Map) return [...tools.entries()];
+    if (Array.isArray(tools)) return tools.map((value, index) => [index, value]);
+    if (tools instanceof Set) return [...tools].map((value, index) => [index, value]);
+    if (typeof tools === "object" && tools !== null) return Object.entries(tools);
+    return [];
+  };
 
-    for (const raw of tools.slice(0, MAX_TOOLS)) {
-      const tool = raw as Record<string, unknown>;
-      const name = typeof tool.name === "string" ? tool.name : undefined;
+  /** The public descriptor, which may be the value or may be wrapped. */
+  const descriptorOf = (value: unknown): Record<string, unknown> => {
+    const outer = (value ?? {}) as Record<string, unknown>;
+    const item = outer.item;
+    return typeof item === "object" && item !== null
+      ? (item as Record<string, unknown>)
+      : outer;
+  };
+
+  /** A schema arrives as an object, or as the JSON text of one. */
+  const schemaOf = (descriptor: Record<string, unknown>, wrapper: unknown): unknown => {
+    const outer = (wrapper ?? {}) as Record<string, unknown>;
+    const candidate =
+      descriptor.inputSchema ?? outer.inputSchema ?? outer.registeredInputSchema;
+    if (candidate === undefined || candidate === null) return undefined;
+    try {
+      const text = typeof candidate === "string" ? candidate : JSON.stringify(candidate);
+      if (text === undefined || text.length > MAX_SCHEMA_CHARS) return undefined;
+      return JSON.parse(text);
+    } catch {
+      // A cycle, a throwing getter, a BigInt, or text that is not JSON. The
+      // tool's existence is the finding; its schema is a bonus.
+      return undefined;
+    }
+  };
+
+  const webmcpTools: HarvestedWebMcpTool[] = [];
+  const registriesSeen: string[] = [];
+  const named = new Set<string>();
+
+  for (const [registry, value] of registries) {
+    if (value === undefined || value === null) continue;
+    registriesSeen.push(registry);
+
+    for (const [key, raw] of entriesOf((value as { tools?: unknown }).tools).slice(
+      0,
+      MAX_TOOLS,
+    )) {
+      const descriptor = descriptorOf(raw);
+      // A Map is keyed by tool name, so the key is the name when the
+      // descriptor does not carry one of its own.
+      const named_ = descriptor.name ?? (typeof key === "string" ? key : undefined);
+      const name = typeof named_ === "string" ? named_ : undefined;
       if (name === undefined || name === "" || named.has(name)) continue;
       named.add(name);
 
-      let schema: unknown;
+      const schema = schemaOf(descriptor, raw);
+      // §7.2's reason for reading these at all: `readOnlyHint: false` or
+      // `destructiveHint: true` is a destructive operation the page is
+      // publishing to any agent that visits. Reported, never invoked.
+      const annotations = descriptor.annotations;
+      let hints: Record<string, unknown> | undefined;
       try {
-        const encoded = JSON.stringify(tool.inputSchema);
-        if (encoded !== undefined && encoded.length <= MAX_SCHEMA_CHARS) {
-          schema = JSON.parse(encoded);
-        }
+        hints =
+          typeof annotations === "object" && annotations !== null
+            ? (JSON.parse(JSON.stringify(annotations)) as Record<string, unknown>)
+            : undefined;
       } catch {
-        // A schema with a cycle, a getter that throws, or a BigInt in it.
-        // The tool's existence is the finding; its schema is a bonus.
-        schema = undefined;
+        hints = undefined;
       }
 
       webmcpTools.push({
         name: name.slice(0, 200),
-        ...(typeof tool.description === "string"
-          ? { description: tool.description.slice(0, 500) }
+        ...(typeof descriptor.description === "string"
+          ? { description: descriptor.description.slice(0, 500) }
           : {}),
         ...(schema === undefined ? {} : { inputSchema: schema }),
-        ...(typeof tool.endpoint === "string"
-          ? { endpoint: tool.endpoint.slice(0, 2_000) }
+        ...(typeof descriptor.endpoint === "string"
+          ? { endpoint: descriptor.endpoint.slice(0, 2_000) }
           : {}),
+        ...(hints === undefined ? {} : { annotations: hints }),
         registry,
       });
     }
   }
 
-  return { links, forms, controls, webmcpTools };
+  return { links, forms, controls, webmcpTools, webmcpRegistriesSeen: registriesSeen };
 }
 
 function withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {

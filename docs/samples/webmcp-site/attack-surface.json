@@ -3,8 +3,8 @@
   "scan": {
     "session_id": "sess_0001",
     "target": "http://127.0.0.1:8080",
-    "started_at": "2026-09-23T13:38:23.697Z",
-    "finished_at": "2026-09-23T13:38:26.582Z",
+    "started_at": "2026-10-26T09:05:15.167Z",
+    "finished_at": "2026-10-26T09:05:17.093Z",
     "completeness": "complete",
     "rate_profile": "normal",
     "discovery_sources": ["browser"],

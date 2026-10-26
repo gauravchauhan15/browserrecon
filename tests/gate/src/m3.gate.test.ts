@@ -32,7 +32,9 @@ import {
   noisySite,
   parallelSite,
   webmcpSite,
+  webmcpMapSite,
   WEBMCP_TOOLS,
+  WEBMCP_MAP_TOOLS,
   startFixture,
   type RunningFixture,
 } from "@browserrecon/fixtures";
@@ -831,6 +833,55 @@ describe("V3: the artifacts say what the model says", () => {
             .filter((request) => request.method !== "GET")
             .map((request) => `${request.method} ${request.pathname}`),
           "a tool endpoint was called",
+        ).toEqual([]);
+      } finally {
+        await fixture.close();
+      }
+    },
+    180_000,
+  );
+
+  gateTest(
+    "reads a registry shaped the way a production one actually is",
+    async () => {
+      // The first real WebMCP site this tool was pointed at returned zero
+      // tools while four sat in the page. The adapter tested `tools` with
+      // `Array.isArray`, and a production registry exposes a `Map` keyed by
+      // name whose values wrap the descriptor under `item`. It failed
+      // silently, because no-registry is the normal case and nothing
+      // distinguished it from a registry it could not read.
+      //
+      // Both shapes are scanned, here and above: an adapter that handles
+      // only the newer one has made the same mistake in the other direction.
+      const fixture = await startFixture(webmcpMapSite());
+      try {
+        const { model, sessionDir } = await scanAndAssemble(fixture, ["--max-pages", "4"]);
+        const found = model.webmcp.map((tool) => tool.name).sort();
+        expect(found).toEqual(WEBMCP_MAP_TOOLS.map((tool) => tool.name).sort());
+
+        // The schema survives, whether the page offered it as an object or
+        // as JSON text beside it.
+        const search = model.webmcp.find((tool) => tool.name === "search-products");
+        expect((search?.inputSchema as { properties?: object })?.properties).toBeDefined();
+
+        // §7.2's point. The page says `cancel-order` is not read-only, so
+        // the report has to say so where a person will see it.
+        const destructive = model.webmcp.filter((tool) => tool.destructive);
+        expect(destructive.map((tool) => tool.name)).toEqual(["cancel-order"]);
+
+        const report = readFileSync(join(sessionDir, "report.md"), "utf8");
+        const tools = section(report, "WebMCP tools");
+        expect(tools).toContain("cancel-order");
+        expect(tools).toMatch(/state-changing/i);
+        expect(tools).toMatch(/never invoked/i);
+
+        // And none of them was called. The server's own record, not the
+        // scan's account of itself.
+        expect(
+          fixture.requests
+            .filter((request) => request.method !== "GET")
+            .map((request) => `${request.method} ${request.pathname}`),
+          "a WebMCP tool endpoint was invoked",
         ).toEqual([]);
       } finally {
         await fixture.close();

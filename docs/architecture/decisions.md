@@ -295,3 +295,40 @@ labelled as the single sample it always was.
 
 The general rule: before asserting on a measured number, measure it more than
 once. If the samples do not agree, the assertion is about the machine.
+
+### The fixture encoded my guess, and reality disagreed (§21)
+
+The first real WebMCP site this tool was pointed at reported **zero tools**
+while four sat in the page. The adapter read `tools` with `Array.isArray`; a
+production registry exposes a `Map` keyed by tool name, whose values wrap the
+descriptor under `item` alongside `execute` and `mcpHandle`, with the schema
+present both as an object on the descriptor and as JSON text on the wrapper.
+Four assumptions, all wrong, all mine.
+
+The cause was not the code. It was that `webmcp-site.ts` encoded what I
+guessed the shape would be when the spec was young, and then the adapter was
+written to satisfy the fixture. A fixture derived from a guess tests the guess.
+
+Three things changed:
+
+- The adapter normalises `Map`, array, `Set` and keyed object; takes the name
+  from the key when the descriptor has none; parses a schema whether it
+  arrives as an object or as text; and captures `annotations`, which it had
+  never read at all.
+- A second fixture, `webmcp-map-site.ts`, reproduces the real shape. Both are
+  scanned by the gate, because handling only the newer shape is the same
+  mistake facing the other way.
+- The silence is gone. A registry that is present but yields nothing is now
+  reported (§45); before, it was indistinguishable from no registry, which is
+  why four tools could vanish without a trace.
+
+**`annotations` turned out to be the valuable part.** `readOnlyHint: false` or
+`destructiveHint: true` is a page declaring it publishes a state-changing
+operation to any agent that visits — exactly §7.2's "an exposed destructive
+operation is something to report, never to try". The report now names those
+tools in their own sentence rather than leaving them as a row in a table.
+
+The general lesson, and the reason this sits beside the three-flakes note: a
+test built on an assumption confirms the assumption. The spike measurements
+and this fixture failed the same way — both looked like evidence and were
+really a record of what someone expected.

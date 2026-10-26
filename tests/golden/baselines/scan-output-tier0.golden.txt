@@ -156,9 +156,9 @@ _Ratio is of what this scan discovered, never of what the application has._
 
 ## 4. WebMCP tools
 
-| Tool | Endpoint | Description |
-| --- | --- | --- |
-| `searchProducts` | `/api/products/search` | Search the catalog by keyword. |
+| Tool | Mutates | Endpoint | Description |
+| --- | --- | --- | --- |
+| `searchProducts` | unstated | `/api/products/search` | Search the catalog by keyword. |
 
 _Tools are reported, never invoked (§7.2)._
 

@@ -137,6 +137,8 @@ export interface ReportInput {
     readonly name: string;
     readonly endpoint?: string | undefined;
     readonly description?: string | undefined;
+    /** The page's own `readOnlyHint: false` / `destructiveHint: true`. */
+    readonly destructive?: boolean | undefined;
   }[];
   readonly origins: readonly {
     readonly origin: string;
@@ -289,15 +291,28 @@ export function renderReport(input: ReportInput): string {
   out.push(heading("WebMCP tools"), "");
   out.push(
     table(
-      ["Tool", "Endpoint", "Description"],
+      ["Tool", "Mutates", "Endpoint", "Description"],
       input.webmcpTools.map((tool) => [
         `\`${tool.name}\``,
+        tool.destructive === true ? "**yes**" : tool.destructive === false ? "no" : "unstated",
         tool.endpoint === undefined ? "—" : `\`${tool.endpoint}\``,
         tool.description ?? "—",
       ]),
     ),
   );
   if (input.webmcpTools.length > 0) {
+    // §7.2, and the reason this section exists at all. A page publishing a
+    // state-changing operation to any agent that visits is the finding; the
+    // catalogue of read-only ones around it is context.
+    const mutating = input.webmcpTools.filter((tool) => tool.destructive === true);
+    if (mutating.length > 0) {
+      out.push(
+        `**${mutating.length} tool(s) the page declares as state-changing**: ` +
+          mutating.map((tool) => `\`${tool.name}\``).join(", ") +
+          ". Any agent that visits this page can call them.",
+        "",
+      );
+    }
     out.push("_Tools are reported, never invoked (§7.2)._", "");
   }
 

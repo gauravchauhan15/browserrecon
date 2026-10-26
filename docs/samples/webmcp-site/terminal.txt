@@ -3,7 +3,7 @@
   BrowserRecon — http://127.0.0.1:8080
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Scan                      complete · 3s · normal
+  Scan                      complete · 2s · normal
   Discovery                 browser
   AI                        off
 

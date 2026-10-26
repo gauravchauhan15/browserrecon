@@ -379,6 +379,16 @@ export function createRunner(options: RunnerOptions): Runner {
         forms.push({ page: page.url, form });
       }
 
+      // §45: a registry that exists but yields no tool is not the same as no
+      // registry, and conflating them is exactly how a production site's four
+      // tools went missing. Said out loud, once per page that does it.
+      if (page.webmcpRegistriesSeen.length > 0 && page.webmcpTools.length === 0) {
+        log.warn("a WebMCP registry was present but no tool could be read from it", {
+          url: page.url,
+          registries: page.webmcpRegistriesSeen.join(", "),
+        });
+      }
+
       // §21, §44: a registered tool is an operation the page publishes to
       // any agent that visits, and registering one sends nothing — so this
       // is the only place in the pipeline that can ever see it. Deduplicated
@@ -397,6 +407,10 @@ export function createRunner(options: RunnerOptions): Runner {
             ...(tool.description === undefined ? {} : { description: tool.description }),
             ...(tool.inputSchema === undefined ? {} : { inputSchema: tool.inputSchema }),
             ...(tool.endpoint === undefined ? {} : { endpoint: tool.endpoint }),
+            // §7.2: `readOnlyHint: false` or `destructiveHint: true` is the
+            // page telling us it publishes a destructive operation to any
+            // agent that visits. That is the finding.
+            ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
             origin: originOf(page.url),
             url: page.url,
             registry: tool.registry,

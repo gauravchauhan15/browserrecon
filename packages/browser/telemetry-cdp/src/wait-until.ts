@@ -12,12 +12,25 @@
  * heuristic rather than a bug. Waiting for the specific condition removes
  * the guess: the test passes as soon as what it needs has arrived, and fails
  * with a clear timeout if it genuinely never does.
+ *
+ * ## The ceiling is deliberately generous
+ *
+ * It was eight seconds, and a test whose healthy case is 1.3 s still hit it
+ * in the full suite — the same flake this helper exists to prevent, surviving
+ * in the one number that had been left as a guess.
+ *
+ * The two costs are not symmetric. A ceiling set too high is paid only when
+ * something is genuinely broken, once, as a slower failure. A ceiling set too
+ * low is paid at random on healthy runs, and teaches everyone to re-run until
+ * green — which is the habit that lets a real failure through. So this is
+ * sized for a loaded CI runner with several browsers on it, not for an idle
+ * laptop. Reaching it still means the event never arrived.
  */
 export async function waitUntil(
   predicate: () => boolean,
   options: { readonly timeoutMs?: number; readonly what?: string } = {},
 ): Promise<void> {
-  const timeoutMs = options.timeoutMs ?? 8_000;
+  const timeoutMs = options.timeoutMs ?? 30_000;
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {

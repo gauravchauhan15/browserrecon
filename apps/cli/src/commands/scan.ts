@@ -727,6 +727,7 @@ async function writeArtifacts(
         name: tool.name,
         ...(tool.endpoint === undefined ? {} : { endpoint: tool.endpoint }),
         ...(tool.description === undefined ? {} : { description: tool.description }),
+        destructive: tool.destructive,
       })),
       workflows: reportWorkflows(assembled),
       apis: assembled.api.apis.map((api) => ({

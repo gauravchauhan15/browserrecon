@@ -4,7 +4,7 @@
 | ----------------- | ------------------ |
 | Session           | sess_0001          |
 | Schema version    | 1.0.0              |
-| Duration          | 3s                 |
+| Duration          | 2s                 |
 | Rate profile      | normal             |
 | Allowed methods   | GET, HEAD, OPTIONS |
 | Discovery sources | browser            |
@@ -40,11 +40,11 @@ _No workflows were detected._
 
 ## 4. WebMCP tools
 
-| Tool             | Endpoint               | Description                               |
-| ---------------- | ---------------------- | ----------------------------------------- |
-| `searchProducts` | `/api/products/search` | Search the catalog by keyword.            |
-| `addToCart`      | `/api/cart/items`      | Add a product to the current cart.        |
-| `deleteAccount`  | `/api/account`         | Permanently delete the signed-in account. |
+| Tool             | Mutates  | Endpoint               | Description                               |
+| ---------------- | -------- | ---------------------- | ----------------------------------------- |
+| `searchProducts` | unstated | `/api/products/search` | Search the catalog by keyword.            |
+| `addToCart`      | unstated | `/api/cart/items`      | Add a product to the current cart.        |
+| `deleteAccount`  | unstated | `/api/account`         | Permanently delete the signed-in account. |
 
 _Tools are reported, never invoked (§7.2)._
 

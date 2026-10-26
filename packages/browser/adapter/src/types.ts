@@ -112,6 +112,15 @@ export interface PageHarvest {
    * after its scripts have run.
    */
   readonly webmcpTools: readonly HarvestedWebMcpTool[];
+  /**
+   * Registries that were present on the page, whether or not any tool was
+   * read out of them.
+   *
+   * §45's no-silent-loss rule. "No registry" and "a registry in a shape this
+   * adapter does not understand" used to produce identical output — which is
+   * how a production site's four tools went missing without a trace.
+   */
+  readonly webmcpRegistriesSeen: readonly string[];
   /** The URL these were read from, which may differ from the one requested. */
   readonly url: string;
 }
@@ -130,6 +139,15 @@ export interface HarvestedWebMcpTool {
   readonly inputSchema?: unknown;
   /** The endpoint the tool says it calls, where it says so. */
   readonly endpoint?: string | undefined;
+  /**
+   * MCP tool annotations, where the page supplies them.
+   *
+   * `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`,
+   * `untrustedContentHint`. §7.2's whole point: a tool the page itself marks
+   * as not read-only is a destructive operation published to any visiting
+   * agent, and that is something to report prominently — never to invoke.
+   */
+  readonly annotations?: Record<string, unknown> | undefined;
   /** Which registry it came from, so a changing spec is visible in the log. */
   readonly registry: string;
 }

@@ -81,6 +81,8 @@ interface WebMcpToolPayload {
   readonly endpoint?: string;
   readonly origin?: string;
   readonly url?: string;
+  readonly inputSchema?: unknown;
+  readonly annotations?: Record<string, unknown>;
 }
 
 /** One tool the page published to any agent that visits. */
@@ -88,6 +90,28 @@ export interface WebMcpToolFound {
   readonly name: string;
   readonly description?: string | undefined;
   readonly endpoint?: string | undefined;
+  /**
+   * The tool's declared input schema.
+   *
+   * Harvested and published since the adapter was written, and dropped here
+   * — the model carried the name and the endpoint and discarded the one
+   * field that says what the tool *takes*. For an attack-surface model the
+   * parameters are most of the value: they are the shape of what any
+   * visiting agent can pass in.
+   */
+  readonly inputSchema?: unknown;
+  /** MCP tool annotations as the page declared them (§7.2). */
+  readonly annotations?: Record<string, unknown> | undefined;
+  /**
+   * Whether the page says the tool changes state.
+   *
+   * Three-valued on purpose. `undefined` means the page declared no
+   * annotations, which is not the same as declaring the tool safe — and
+   * rendering that as "no" is a claim the page never made. The first sample
+   * report after this field was added showed a `deleteAccount` tool,
+   * described as permanently deleting an account, in a column reading "no".
+   */
+  readonly destructive?: boolean | undefined;
   readonly eventId: string;
   readonly authContext: string;
 }
@@ -107,6 +131,19 @@ function webMcpTools(events: readonly EventEnvelope[]): readonly WebMcpToolFound
       name,
       ...(payload.description === undefined ? {} : { description: payload.description }),
       ...(payload.endpoint === undefined ? {} : { endpoint: payload.endpoint }),
+      ...(payload.inputSchema === undefined ? {} : { inputSchema: payload.inputSchema }),
+      ...(payload.annotations === undefined ? {} : { annotations: payload.annotations }),
+      // Either hint is enough: a page saying `readOnlyHint: false` has said
+      // the same thing as one saying `destructiveHint: true`, and a report
+      // understanding only one of them would miss half. Absent both, the
+      // answer is "the page did not say" rather than "no".
+      ...(payload.annotations === undefined
+        ? {}
+        : {
+            destructive:
+              payload.annotations.destructiveHint === true ||
+              payload.annotations.readOnlyHint === false,
+          }),
       eventId: envelope.event_id,
       authContext: envelope.auth_context,
     });

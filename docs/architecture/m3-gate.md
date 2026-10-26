@@ -274,6 +274,10 @@ live scan anywhere.
 
 ## Not proven, and worth stating
 
+- **No live site has been _scanned_.** One real WebMCP registry has now been
+  _inspected_, in a browser console, and it immediately falsified the
+  adapter — see `decisions.md`. The scan path itself still has not met a real
+  application.
 - **No live site has been scanned.** Gate A, which is next, is the first
   contact with anything that is not a fixture. Everything above is true of
   eleven deterministic local applications.
