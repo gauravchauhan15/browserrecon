@@ -92,6 +92,7 @@ const DEFAULT_SETTLE_TIMEOUT_MS = 5_000;
  */
 const POLICY_ACTION: Readonly<Partial<Record<AdapterAction, string>>> = {
   harvest: "inspect_page",
+  exists: "inspect_page",
 };
 
 /**
@@ -540,7 +541,11 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
       // one capability two names, and the next reader would have to work
       // out whether they mean different things.
       kind: policyActionFor(action),
-      ...(proposal.url === undefined ? {} : { url: proposal.url }),
+      // The page the action happens on, when the action does not name a URL
+      // of its own. A click has a location even though it has no target, and
+      // a policy deciding whether to allow it should be able to see which
+      // page it is on — an origin-scoped rule cannot work without it.
+      url: proposal.url ?? this.#page.url(),
       ...(proposal.stateChanging === undefined
         ? {}
         : { stateChanging: proposal.stateChanging }),
@@ -713,6 +718,27 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
     } catch (error) {
       const { kind, detail } = classify(error);
       return failed("back", kind, detail);
+    }
+  }
+
+  async exists(selector: string, options: ActionOptions = {}): Promise<ActionResult<boolean>> {
+    const refusal = this.#check("exists", { ...options });
+    if (refusal) return refusal;
+
+    const timeout = options.timeoutMs ?? this.#timeout;
+    try {
+      // `$` rather than `waitForSelector`: the question is whether it is
+      // there now, not whether it might appear. A success condition that has
+      // to be waited for is a condition that has not been met yet.
+      const found = await withDeadline(
+        this.#page.$(selector).then((handle) => handle !== null),
+        timeout,
+        `exists ${selector}`,
+      );
+      return ok(found);
+    } catch (error) {
+      const { kind, detail } = classify(error);
+      return failed("exists", kind, detail);
     }
   }
 

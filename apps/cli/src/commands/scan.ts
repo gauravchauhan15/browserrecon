@@ -22,7 +22,7 @@
  * of the runner when it was written inline here.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import {
   buildSessionAuthorization,
@@ -32,9 +32,20 @@ import {
   nonInteractiveHelp,
   type AcknowledgmentMethod,
 } from "@browserrecon/authorization";
-import { createBrowserNativeDiscovery, createRunner } from "@browserrecon/browser-runner";
+import {
+  createBrowserNativeDiscovery,
+  createRunner,
+  type LoginOutcome,
+} from "@browserrecon/browser-runner";
+import {
+  parseAuthProfile,
+  resolveSecrets,
+  type AuthProfile,
+  type Secrets,
+} from "@browserrecon/auth";
 import { resolveChromePath, type ChromeProbes } from "@browserrecon/browser-manager";
 import { CONFIG_SPEC, formatConfigErrors, loadConfig } from "@browserrecon/config";
+import { parse as parseYaml } from "yaml";
 import { createRedactor, createSecureOutputDir, IdFactory } from "@browserrecon/core";
 import { NOT_NAVIGABLE_NOTE, type GapInput, type GapReason } from "@browserrecon/coverage";
 import {
@@ -181,6 +192,19 @@ export async function scan(input: ScanCommandInput): Promise<void> {
   // unredacted (§37.2).
   createSecureOutputDir(sessionDir);
 
+  // ---- 4a. the authentication profile, if one was given --------------------
+  // Resolved before the browser launches: a missing environment variable
+  // should stop the scan here, not two minutes in with a browser open and a
+  // login page on screen.
+  let authProfile: { readonly profile: AuthProfile; readonly secrets: Secrets } | undefined;
+  let authOutcome: LoginOutcome | undefined;
+  let authState = "anonymous";
+
+  const profilePath = (resolved.config.auth as { profile?: string } | undefined)?.profile;
+  if (profilePath !== undefined && profilePath !== "") {
+    authProfile = loadAuthProfile(profilePath, input.env);
+  }
+
   const store = new EventStore({ dir: sessionDir, sessionId });
   const bus = new EventBus({ sessionOrdinal });
   const network = collectNetwork(bus);
@@ -307,7 +331,27 @@ export async function scan(input: ScanCommandInput): Promise<void> {
       queue,
       discovery,
       browsing: {
-        launch: () => runner.launch(),
+        launch: async () => {
+          await runner.launch();
+          // Sign in before the queue starts, so every page after this is
+          // observed as the authenticated identity (§12.3). A failure is
+          // reported and the scan continues anonymously — less coverage is
+          // not a crashed scan, and §45 wants it recorded rather than fatal.
+          if (authProfile !== undefined) {
+            const outcome = await runner.signIn(authProfile);
+            authOutcome = outcome;
+            if (outcome.status === "authenticated") {
+              authState = authProfile.profile.name;
+              input.warn(`Signed in as "${authState}" — ${outcome.evidence}`);
+            } else {
+              input.warn(
+                `Could not sign in (${outcome.status}): ${outcome.detail}\n` +
+                  "The scan continues as an anonymous visitor, so anything behind " +
+                  "the login will be reported as unreached rather than absent.",
+              );
+            }
+          }
+        },
         close: () => runner.close(),
         visit: async (context) => {
           const result = await runner.visit(context);
@@ -361,6 +405,12 @@ export async function scan(input: ScanCommandInput): Promise<void> {
             exportInput,
             network.model,
             assembled,
+            {
+              state: authState,
+              ...(authOutcome === undefined || authOutcome.status === "authenticated"
+                ? {}
+                : { failure: { status: authOutcome.status, detail: authOutcome.detail } }),
+            },
           );
         },
       },
@@ -611,6 +661,12 @@ async function writeArtifacts(
   },
   model: NetworkModel,
   assembled: AssembledModel,
+  auth: {
+    /** The identity the scan observed under. `anonymous` unless a login landed. */
+    readonly state: string;
+    /** Set only when a profile was given and the login did not succeed. */
+    readonly failure?: { readonly status: string; readonly detail: string } | undefined;
+  },
 ): Promise<readonly string[]> {
   const redactor = createRedactor();
   const jsonPath = join(sessionDir, "attack-surface.json");
@@ -715,7 +771,7 @@ async function writeArtifacts(
         rateProfile,
         allowedMethods: [...policy.allowedMethods],
         discoverySources: ["browser"],
-        authState: "anonymous",
+        authState: auth.state,
         aiMode: "off",
       },
       score: { value: assembled.score.score, description: assembled.score.description },
@@ -743,7 +799,21 @@ async function writeArtifacts(
         firstParty: asset.first_party,
         analysis: asset.analysis,
       })),
-      barriers: [],
+      // §8.6, §45: a login that did not land is a barrier, and the pages
+      // behind it are unreached rather than absent. Reported here because a
+      // report that silently describes the anonymous surface of an
+      // application the user meant to scan signed in is the most misleading
+      // output this tool could produce.
+      barriers:
+        auth.failure === undefined
+          ? []
+          : [
+              {
+                category: "authentication",
+                url: policy.targetOrigin,
+                evidence: `${auth.failure.status}: ${auth.failure.detail}`,
+              },
+            ],
       // The typed queue, with §10C.7's own responses — not a second remedy
       // table that can drift from it.
       gaps: gapRows(assembled),
@@ -832,6 +902,61 @@ function nextSessionOrdinal(outputRoot: string): number {
     // No output directory yet, which is the first scan on this machine.
   }
   return highest + 1;
+}
+
+/**
+ * Read a profile from disk and resolve its secrets from the environment.
+ *
+ * §12.1 is enforced by the parser, not by convention: a profile carrying an
+ * inline password does not parse, and the only thing this function reads from
+ * the file is the *names* of environment variables.
+ */
+function loadAuthProfile(
+  path: string,
+  env: Readonly<Record<string, string | undefined>>,
+): { readonly profile: AuthProfile; readonly secrets: Secrets } {
+  if (!existsSync(path)) {
+    throw new CliError(
+      `No authentication profile at ${path}.`,
+      EXIT_CODES.configuration,
+      "Pass --auth-profile with a path to a YAML or JSON profile.",
+    );
+  }
+
+  // `parseAuthProfile` validates a parsed mapping, not file text — the same
+  // split `loadConfig` uses, so a profile can be YAML like everything else a
+  // user writes for this tool.
+  let document: unknown;
+  try {
+    const text = readFileSync(path, "utf8");
+    document = path.endsWith(".json") ? JSON.parse(text) : parseYaml(text);
+  } catch (error) {
+    throw new CliError(
+      `Could not read ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      EXIT_CODES.configuration,
+      "A profile is YAML (.yaml/.yml) or JSON (.json).",
+    );
+  }
+
+  const parsed = parseAuthProfile(document);
+  if (!parsed.ok) {
+    throw new CliError(
+      parsed.problems.map((problem) => `  ${problem.field}: ${problem.reason}`).join("\n"),
+      EXIT_CODES.configuration,
+      "Fix the profile above. Secrets are named, never written in the file (§12.1).",
+    );
+  }
+
+  const secrets = resolveSecrets(parsed.profile, env);
+  if (!secrets.ok) {
+    throw new CliError(
+      secrets.problems.map((problem) => `  ${problem.variable} ${problem.reason}`).join("\n"),
+      EXIT_CODES.configuration,
+      "Export the variables above, then run the scan again.",
+    );
+  }
+
+  return { profile: parsed.profile, secrets: secrets.secrets };
 }
 
 /** §10C.1's dimension names, as a reader would say them. */

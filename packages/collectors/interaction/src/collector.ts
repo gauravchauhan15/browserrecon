@@ -243,6 +243,11 @@ export function recordInteractions(options: RecordOptions): RecordingAdapter {
     harvest: async (actionOptions?: ActionOptions): Promise<ActionResult<PageHarvest>> =>
       options.adapter.harvest(actionOptions),
 
+    exists: async (
+      selector: string,
+      actionOptions?: ActionOptions,
+    ): Promise<ActionResult<boolean>> => options.adapter.exists(selector, actionOptions),
+
     waitForSettled: async (
       actionOptions?: ActionOptions,
     ): Promise<ActionResult<SettledOutcome>> => options.adapter.waitForSettled(actionOptions),

@@ -16,3 +16,6 @@ export type { ControlOutcome, ControlVerdict, DecideOptions, SkipReason } from "
 
 export { createBrowserNativeDiscovery } from "./discovery.js";
 export type { BrowserNativeDiscoveryOptions } from "./discovery.js";
+
+export { login } from "./login.js";
+export type { LoginInput, LoginOutcome } from "./login.js";

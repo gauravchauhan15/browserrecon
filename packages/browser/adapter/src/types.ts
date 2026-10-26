@@ -35,6 +35,7 @@ export const ADAPTER_ACTIONS = [
   "scroll",
   "back",
   "wait",
+  "exists",
   "harvest",
 ] as const;
 
@@ -235,6 +236,14 @@ export interface BrowserAdapter {
    * and because reading the *live* DOM is the whole point. The markup a
    * crawler fetches for `dynamic-site` has two links; the page has six.
    */
+  /**
+   * Whether an element matching `selector` is in the document.
+   *
+   * A read, and the only honest way to test an authentication success
+   * condition: "a selector that exists only when signed in" cannot be checked
+   * by clicking it. Policy sees this as `inspect_page`, the same as `harvest`.
+   */
+  exists(selector: string, options?: ActionOptions): Promise<ActionResult<boolean>>;
   harvest(options?: ActionOptions): Promise<ActionResult<PageHarvest>>;
   /** Release the page. Does not close the browser — the manager owns that. */
   close(): Promise<void>;

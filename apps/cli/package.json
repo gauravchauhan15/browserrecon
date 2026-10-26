@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@browserrecon/attack-surface": "workspace:*",
+    "@browserrecon/auth": "workspace:*",
     "@browserrecon/authorization": "workspace:*",
     "@browserrecon/browser-manager": "workspace:*",
     "@browserrecon/browser-runner": "workspace:*",
@@ -34,7 +35,8 @@
     "@browserrecon/orchestrator": "workspace:*",
     "@browserrecon/policy": "workspace:*",
     "@browserrecon/rate-controller": "workspace:*",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "yaml": "^2.9.0"
   },
   "bin": {
     "browserrecon": "./bin/browserrecon.js"

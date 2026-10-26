@@ -137,6 +137,65 @@ nothing calls yet. Do not read a result as evidence about any of them.
 
 ---
 
+## 4a. Scanning signed in
+
+Everything above runs as an anonymous visitor. To scan what is behind a login,
+write a profile — **the file names environment variables and never holds a
+secret**. A profile with a password in it does not parse (§12.1).
+
+`profile.yaml`:
+
+```yaml
+name: customer
+login:
+  url: https://your-target.example.com/login
+  # Omit the selectors unless the defaults miss. They cover
+  # input[type=email] / input[type=password] / button[type=submit].
+credentials:
+  usernameEnv: BR_USER
+  passwordEnv: BR_PASS
+successCondition:
+  # Pick ONE. A selector that exists only when signed in is the clearest.
+  selectorPresent: "#account-menu"
+  # urlContains: /dashboard
+  # selectorAbsent: "#login-form"
+```
+
+Export the secrets, then scan:
+
+```bash
+export BR_USER='you@example.com' BR_PASS='your-password'
+```
+
+```bash
+node apps/cli/bin/browserrecon.js scan https://your-target.example.com --i-am-authorized --auth-profile profile.yaml --max-pages 25 --out ~/browserrecon-runs
+```
+
+For OWASP Juice Shop, register an account in the UI first, then use
+`selectorPresent: "#navbarAccount"` with `login.url` set to
+`http://localhost:3000/#/login`.
+
+**TOTP** is supported where you hold the secret: add `mfa: {type: totp,
+secretEnv: BR_TOTP}`. Any other second factor is reported and not attempted —
+§12.2 makes MFA bypass permanently out of scope, so a profile declaring one
+fails with a message saying so rather than trying to work around it.
+
+What to check in the result:
+
+- The header says `Auth state | customer`, not `anonymous`.
+- **Section 7, Access barriers, is empty.** A failed login appears there as an
+  `authentication` barrier — if it is there, the scan described the anonymous
+  surface of your application and the report says so rather than quietly
+  reporting a smaller app.
+- Pages that only exist signed in are in the inventory.
+
+The scan submits the login form and nothing else. That exemption is scoped to
+the origin of the login URL and closed as soon as the sign-in finishes;
+everything else stays read-only, and forms are still reported and never
+submitted.
+
+---
+
 ## 5. What to look at, in order
 
 Everything lands in `~/browserrecon-runs/sess_NNNN/`.

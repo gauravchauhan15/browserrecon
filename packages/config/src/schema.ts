@@ -99,6 +99,14 @@ export const CONFIG_SPEC: ConfigSpec = [
   }),
 
   // --- Discovery ------------------------------------------------------------
+  str(
+    "auth.profile",
+    "Authentication profile file (YAML or JSON). Secrets come from the environment (§12.1).",
+    {
+      cli: "auth-profile",
+      env: "BROWSERRECON_AUTH_PROFILE",
+    },
+  ),
   bool("discovery.katana", "Use Katana when present on PATH. Never required (§10D.1).", {
     default: true,
     cli: "katana",

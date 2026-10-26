@@ -50,7 +50,16 @@ export function newCounters(): Counters {
 export interface TelemetryContext {
   readonly bus: EventBus;
   /** §12.3 makes this mandatory on every event, and it is never inferred. */
-  readonly authContext: string;
+  /**
+   * Mutable, unlike everything else here.
+   *
+   * §12.3 makes the auth context mandatory on every event, and a scan that
+   * signs in halfway through has two of them. Fixing it at attach time would
+   * label every post-login observation `anonymous`, which is not a missing
+   * field but a wrong one — and the whole point of §12.4's differential is
+   * telling one identity's reach from another's.
+   */
+  authContext: string;
   readonly log: Logger;
   readonly limits: BodyCaptureLimits;
   readonly counters: Counters;
