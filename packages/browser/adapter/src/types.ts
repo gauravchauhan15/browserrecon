@@ -137,6 +137,8 @@ export interface HarvestedWebMcpTool {
   readonly description?: string | undefined;
   /** The declared input schema, as JSON. Opaque on purpose. */
   readonly inputSchema?: unknown;
+  /** What the tool returns to an agent — data exposure, not just input. */
+  readonly outputSchema?: unknown;
   /** The endpoint the tool says it calls, where it says so. */
   readonly endpoint?: string | undefined;
   /**

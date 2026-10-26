@@ -82,6 +82,7 @@ interface WebMcpToolPayload {
   readonly origin?: string;
   readonly url?: string;
   readonly inputSchema?: unknown;
+  readonly outputSchema?: unknown;
   readonly annotations?: Record<string, unknown>;
 }
 
@@ -100,20 +101,51 @@ export interface WebMcpToolFound {
    * visiting agent can pass in.
    */
   readonly inputSchema?: unknown;
+  /** What the tool returns to an agent. Data exposure, not just input. */
+  readonly outputSchema?: unknown;
   /** MCP tool annotations as the page declared them (§7.2). */
   readonly annotations?: Record<string, unknown> | undefined;
   /**
-   * Whether the page says the tool changes state.
+   * What the page says the tool does, in MCP's own terms.
    *
-   * Three-valued on purpose. `undefined` means the page declared no
-   * annotations, which is not the same as declaring the tool safe — and
-   * rendering that as "no" is a claim the page never made. The first sample
-   * report after this field was added showed a `deleteAccount` tool,
-   * described as permanently deleting an account, in a column reading "no".
+   * Four-valued, and the distinctions are the point:
+   *
+   *  - `read_only` — `readOnlyHint: true`.
+   *  - `writes` — `readOnlyHint: false`, which MCP defines as "may modify
+   *    its environment". That is not the same as destructive.
+   *  - `destructive` — `destructiveHint: true`, "may perform destructive
+   *    updates".
+   *  - `undefined` — the page declared no annotations. Not a statement that
+   *    the tool is safe, and rendering it as one is a claim the page never
+   *    made. An earlier version reported a `deleteAccount` tool, described
+   *    as permanently deleting an account, in a column reading "no".
+   *
+   * The first version collapsed `writes` and `destructive` into one boolean,
+   * which was wrong in the dangerous direction: feverup.com publishes
+   * `home_navigate_to_city` with `readOnlyHint: false`, and reporting a
+   * navigation helper identically to `cancel-order` is a false alarm in a
+   * security report — the kind that teaches a reader to discount the real
+   * ones.
    */
-  readonly destructive?: boolean | undefined;
+  readonly effect?: "read_only" | "writes" | "destructive" | undefined;
   readonly eventId: string;
   readonly authContext: string;
+}
+
+/**
+ * MCP's annotation hints, reduced to one answer.
+ *
+ * Absent annotations give `undefined` — "the page did not say" — never a
+ * cheerful default.
+ */
+function effectOf(
+  annotations: Record<string, unknown> | undefined,
+): "read_only" | "writes" | "destructive" | undefined {
+  if (annotations === undefined) return undefined;
+  if (annotations.destructiveHint === true) return "destructive";
+  if (annotations.readOnlyHint === false) return "writes";
+  if (annotations.readOnlyHint === true) return "read_only";
+  return undefined;
 }
 
 /** Tools the page registered, read straight from the log. */
@@ -132,18 +164,13 @@ function webMcpTools(events: readonly EventEnvelope[]): readonly WebMcpToolFound
       ...(payload.description === undefined ? {} : { description: payload.description }),
       ...(payload.endpoint === undefined ? {} : { endpoint: payload.endpoint }),
       ...(payload.inputSchema === undefined ? {} : { inputSchema: payload.inputSchema }),
+      ...(payload.outputSchema === undefined ? {} : { outputSchema: payload.outputSchema }),
       ...(payload.annotations === undefined ? {} : { annotations: payload.annotations }),
-      // Either hint is enough: a page saying `readOnlyHint: false` has said
-      // the same thing as one saying `destructiveHint: true`, and a report
-      // understanding only one of them would miss half. Absent both, the
-      // answer is "the page did not say" rather than "no".
-      ...(payload.annotations === undefined
+      // `destructiveHint` outranks `readOnlyHint`, because MCP only gives it
+      // meaning when the tool is not read-only in the first place.
+      ...(effectOf(payload.annotations) === undefined
         ? {}
-        : {
-            destructive:
-              payload.annotations.destructiveHint === true ||
-              payload.annotations.readOnlyHint === false,
-          }),
+        : { effect: effectOf(payload.annotations) }),
       eventId: envelope.event_id,
       authContext: envelope.auth_context,
     });

@@ -864,15 +864,33 @@ describe("V3: the artifacts say what the model says", () => {
         const search = model.webmcp.find((tool) => tool.name === "search-products");
         expect((search?.inputSchema as { properties?: object })?.properties).toBeDefined();
 
-        // §7.2's point. The page says `cancel-order` is not read-only, so
-        // the report has to say so where a person will see it.
-        const destructive = model.webmcp.filter((tool) => tool.destructive);
-        expect(destructive.map((tool) => tool.name)).toEqual(["cancel-order"]);
+        // Every tool is found whether the page wrapped the descriptor under
+        // `item` (NETGEAR) or stored it flat (feverup, pickcrest). The
+        // fixture alternates, so a regression to either shape loses half.
+        expect(found.length).toBe(WEBMCP_MAP_TOOLS.length);
+
+        // §7.2, at the precision MCP actually defines. `readOnlyHint: false`
+        // means "may modify its environment" and covers a navigation helper;
+        // `destructiveHint: true` is the one that deserves an alarm.
+        // Collapsing them reports `navigate-to-city` like `cancel-order`,
+        // which is the false alarm that devalues the real one.
+        const byEffect = (effect: string): string[] =>
+          model.webmcp
+            .filter((tool) => tool.effect === effect)
+            .map((tool) => tool.name)
+            .sort();
+        expect(byEffect("destructive")).toEqual(["cancel-order"]);
+        expect(byEffect("writes")).toEqual(["navigate-to-city"]);
+        expect(byEffect("read_only")).toEqual(["get-cart", "search-products"]);
+        // A page that declared nothing says nothing — never "read-only".
+        expect(
+          model.webmcp.find((tool) => tool.name === "list-guides")?.effect,
+        ).toBeUndefined();
 
         const report = readFileSync(join(sessionDir, "report.md"), "utf8");
         const tools = section(report, "WebMCP tools");
-        expect(tools).toContain("cancel-order");
-        expect(tools).toMatch(/state-changing/i);
+        expect(tools).toMatch(/\*\*destructive\*\*/);
+        expect(tools).toContain("unstated");
         expect(tools).toMatch(/never invoked/i);
 
         // And none of them was called. The server's own record, not the

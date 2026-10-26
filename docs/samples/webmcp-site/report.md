@@ -40,7 +40,7 @@ _No workflows were detected._
 
 ## 4. WebMCP tools
 
-| Tool             | Mutates  | Endpoint               | Description                               |
+| Tool             | Effect   | Endpoint               | Description                               |
 | ---------------- | -------- | ---------------------- | ----------------------------------------- |
 | `searchProducts` | unstated | `/api/products/search` | Search the catalog by keyword.            |
 | `addToCart`      | unstated | `/api/cart/items`      | Add a product to the current cart.        |

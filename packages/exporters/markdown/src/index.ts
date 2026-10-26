@@ -137,8 +137,8 @@ export interface ReportInput {
     readonly name: string;
     readonly endpoint?: string | undefined;
     readonly description?: string | undefined;
-    /** The page's own `readOnlyHint: false` / `destructiveHint: true`. */
-    readonly destructive?: boolean | undefined;
+    /** What the page says it does, in MCP's own terms. Absent = unstated. */
+    readonly effect?: "read_only" | "writes" | "destructive" | undefined;
   }[];
   readonly origins: readonly {
     readonly origin: string;
@@ -291,10 +291,18 @@ export function renderReport(input: ReportInput): string {
   out.push(heading("WebMCP tools"), "");
   out.push(
     table(
-      ["Tool", "Mutates", "Endpoint", "Description"],
+      ["Tool", "Effect", "Endpoint", "Description"],
       input.webmcpTools.map((tool) => [
         `\`${tool.name}\``,
-        tool.destructive === true ? "**yes**" : tool.destructive === false ? "no" : "unstated",
+        // The page's own claim, in its own terms. "unstated" is the honest
+        // rendering of silence — not "read-only".
+        tool.effect === "destructive"
+          ? "**destructive**"
+          : tool.effect === "writes"
+            ? "writes"
+            : tool.effect === "read_only"
+              ? "read-only"
+              : "unstated",
         tool.endpoint === undefined ? "—" : `\`${tool.endpoint}\``,
         tool.description ?? "—",
       ]),
@@ -304,12 +312,26 @@ export function renderReport(input: ReportInput): string {
     // §7.2, and the reason this section exists at all. A page publishing a
     // state-changing operation to any agent that visits is the finding; the
     // catalogue of read-only ones around it is context.
-    const mutating = input.webmcpTools.filter((tool) => tool.destructive === true);
-    if (mutating.length > 0) {
+    const destructive = input.webmcpTools.filter((tool) => tool.effect === "destructive");
+    const writes = input.webmcpTools.filter((tool) => tool.effect === "writes");
+    if (destructive.length > 0) {
       out.push(
-        `**${mutating.length} tool(s) the page declares as state-changing**: ` +
-          mutating.map((tool) => `\`${tool.name}\``).join(", ") +
+        `**${destructive.length} tool(s) the page declares destructive**: ` +
+          destructive.map((tool) => `\`${tool.name}\``).join(", ") +
           ". Any agent that visits this page can call them.",
+        "",
+      );
+    }
+    if (writes.length > 0) {
+      // Listed separately and more quietly. MCP's `readOnlyHint: false` means
+      // "may modify its environment", which covers a navigation helper as
+      // well as a write — reporting both as destructive is the false alarm
+      // that teaches a reader to discount the real ones.
+      out.push(
+        `${writes.length} tool(s) are declared as modifying state, without a ` +
+          `destructive hint: ` +
+          writes.map((tool) => `\`${tool.name}\``).join(", ") +
+          ".",
         "",
       );
     }

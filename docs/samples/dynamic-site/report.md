@@ -4,7 +4,7 @@
 | ----------------- | ------------------ |
 | Session           | sess_0001          |
 | Schema version    | 1.0.0              |
-| Duration          | 8s                 |
+| Duration          | 9s                 |
 | Rate profile      | normal             |
 | Allowed methods   | GET, HEAD, OPTIONS |
 | Discovery sources | browser            |

@@ -406,6 +406,7 @@ export function createRunner(options: RunnerOptions): Runner {
             name: tool.name,
             ...(tool.description === undefined ? {} : { description: tool.description }),
             ...(tool.inputSchema === undefined ? {} : { inputSchema: tool.inputSchema }),
+            ...(tool.outputSchema === undefined ? {} : { outputSchema: tool.outputSchema }),
             ...(tool.endpoint === undefined ? {} : { endpoint: tool.endpoint }),
             // §7.2: `readOnlyHint: false` or `destructiveHint: true` is the
             // page telling us it publishes a destructive operation to any
