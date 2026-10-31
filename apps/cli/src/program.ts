@@ -30,6 +30,50 @@ export interface ProgramIo {
   readonly err: (line: string) => void;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly version: string;
+  /**
+   * Ask a question and return the answer. Defaults to the terminal.
+   *
+   * Injected for the same reason `out` and `err` are: the §7.4 gate is the
+   * one path in this tool that must not be testable only by hand, and it was
+   * — which is how it shipped printing the question and exiting without
+   * waiting for an answer.
+   */
+  readonly ask?: ((question: string) => Promise<string>) | undefined;
+  /** Override the TTY check. Tests set this; nothing else should. */
+  readonly interactive?: boolean | undefined;
+}
+
+/**
+ * Ask a question on the terminal and wait for the answer.
+ *
+ * The §7.4 gate has always returned "ask the user this", and the CLI threw
+ * the question as an error message instead — so the prompt appeared, the
+ * process exited, and there was no way to answer it. The interactive path
+ * described in the README, SECURITY.md and the runbook had never worked.
+ *
+ * Written against `node:readline/promises` rather than a dependency: one
+ * question, once, on a path that must not acquire supply-chain surface.
+ */
+async function askOnTerminal(question: string): Promise<string> {
+  const { createInterface } = await import("node:readline/promises");
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(question);
+  } catch {
+    // Ctrl+D closes stdin, and `readline` reports that by rejecting. It is a
+    // normal thing to type at a prompt and it plainly means no, so it is
+    // answered as an empty line rather than crashing — which it did, with a
+    // stack trace and "This is a bug", on a question about authorization.
+    //
+    // Anything else that fails here is answered the same way, and for the
+    // same reason: the safe reading of "we could not get an answer" is that
+    // we do not have one.
+    return "";
+  } finally {
+    // Closing matters: an open readline keeps the event loop alive, and the
+    // scan would finish and then hang with no output explaining why.
+    rl.close();
+  }
 }
 
 /** Milestone that delivers each unfinished command, for an honest message. */
@@ -113,7 +157,9 @@ export function buildProgram(io: ProgramIo, argv: readonly string[] = []): Comma
         // A terminal the user is actually at. `isTTY` is the only honest
         // signal available, and getting it wrong in the permissive
         // direction means a CI job hangs on a prompt nobody sees.
-        interactive: process.stdin.isTTY === true && process.stdout.isTTY === true,
+        interactive:
+          io.interactive ?? (process.stdin.isTTY === true && process.stdout.isTTY === true),
+        ask: io.ask ?? askOnTerminal,
         write: io.out,
         warn: io.err,
       });

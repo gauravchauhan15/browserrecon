@@ -110,10 +110,25 @@ export function readSession(dir: string): SessionFile {
 }
 
 export function resume(input: ResumeInput): void {
-  const dir = resolveSessionDir(input.session, input.outputRoot ?? ".output");
-  const prior = readSession(dir);
-
   const cli = collectCliValues(FULL_SPEC, input.parsed, input.argv);
+
+  // Where to look for the session, resolved the same way a scan resolves
+  // where to write one — `--out`, then the environment, then the config
+  // file, then the default.
+  //
+  // This used to be `input.outputRoot ?? ".output"`, and nothing ever passed
+  // `outputRoot`, so `--out` was accepted and ignored: `resume` looked in
+  // `.output` whatever the user said. The settings are resolved below for
+  // the boundary digest, but that happens *after* the session has to be
+  // found, which is why a first pass is needed. It runs without a target,
+  // because the target comes from the session that has not been read yet.
+  const forPaths = loadConfig({ spec: FULL_SPEC, file: input.configFile, env: input.env, cli });
+  const configuredRoot = forPaths.ok
+    ? ((forPaths.config.output as { dir?: string } | undefined)?.dir ?? ".output")
+    : ".output";
+
+  const dir = resolveSessionDir(input.session, input.outputRoot ?? configuredRoot);
+  const prior = readSession(dir);
   // The target is not a flag on `resume` — it comes from the session, and
   // taking it from anywhere else is how the boundary would change silently.
   cli.target = prior.target;

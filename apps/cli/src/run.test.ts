@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -87,7 +87,16 @@ describe("unimplemented commands", () => {
     // `resume` is no longer a stub: the §30 gate is real and runs first, so
     // a missing session is reported as a missing session rather than as an
     // unimplemented command. Only the engine behind the gate is pending.
-    const { code, err } = await invoke(["resume", "sess_0001"]);
+    // Pointed at an empty directory on purpose. It used to resolve
+    // `sess_0001` under the default `.output/`, so the test passed only on a
+    // machine that had never run a scan — and failed the moment one had,
+    // reporting a boundary mismatch instead of a missing session.
+    const { code, err } = await invoke([
+      "resume",
+      "sess_0001",
+      "--out",
+      mkdtempSync(join(tmpdir(), "br-empty-")),
+    ]);
     expect(code).not.toBe(EXIT_CODES.success);
     expect(err).toContain("No session found");
   });
@@ -312,4 +321,131 @@ describe("output discipline", () => {
     expect(success.out).not.toBe("");
     expect(success.err).toBe("");
   });
+});
+
+describe("the §7.4 authorization prompt", () => {
+  /**
+   * This whole block is the test that did not exist.
+   *
+   * The gate has always returned "ask the user this question", and the CLI
+   * threw the question as an error message instead — so the terminal printed
+   * `Are you authorized to test this target? [y/N]` and exited, with no way
+   * to answer. Every document describing the interactive path was wrong, for
+   * every release.
+   */
+  const promptRun = (
+    answer: string | (() => Promise<string>),
+    argv: string[] = [
+      "scan",
+      "https://shop.example.com",
+      "--max-pages",
+      "1",
+      "--out",
+      mkdtempSync(join(tmpdir(), "br-out-")),
+    ],
+    env: Record<string, string | undefined> = {},
+  ): Promise<{ code: number; out: string; err: string; asked: string[] }> => {
+    // An isolated config home, always. `defaultRecordPath({})` falls back to
+    // the real `homedir()`, so these tests wrote authorization for
+    // `shop.example.com` into the developer's own record — and then the
+    // prompt tests stopped seeing a prompt, because the machine now
+    // remembered agreeing. A test that changes the state it is testing
+    // passes once.
+    const configHome = mkdtempSync(join(tmpdir(), "br-authrec-"));
+    const out: string[] = [];
+    const err: string[] = [];
+    const asked: string[] = [];
+    return run({
+      argv,
+      io: {
+        out: (line) => out.push(line),
+        err: (line) => err.push(line),
+        env: { ...env, XDG_CONFIG_HOME: configHome },
+        version: "0.1.0-test",
+        interactive: true,
+        ask: async (question) => {
+          asked.push(question);
+          return typeof answer === "string" ? answer : answer();
+        },
+      },
+    }).then((code) => ({ code, out: out.join("\n"), err: err.join("\n"), asked }));
+  };
+
+  it("actually asks, rather than printing the question and leaving", async () => {
+    const { asked } = await promptRun("n");
+    expect(asked, "the gate never asked anything").toHaveLength(1);
+    expect(asked[0]).toMatch(/authorized/i);
+  });
+
+  it("refuses on no, and says nothing was scanned", async () => {
+    const { code, err } = await promptRun("n");
+    expect(code).toBe(EXIT_CODES.authorization);
+    expect(err).toMatch(/nothing was scanned/i);
+  });
+
+  it("treats an empty answer as a refusal", async () => {
+    // The prompt shows [y/N]. Someone pressing Enter to get past it has not
+    // agreed to anything, and Ctrl+D arrives here as an empty line too.
+    const { code } = await promptRun("");
+    expect(code).toBe(EXIT_CODES.authorization);
+  });
+
+  it("lets a yes through, and remembers it", async () => {
+    // One case, not three. Which spellings count as consent is
+    // `isAffirmative`'s business and is tested there; what this needs to
+    // show is that a yes gets past the gate and is persisted.
+    //
+    // It is slow because consent is followed by a real scan attempt —
+    // Chrome launches, the target does not resolve, the scan fails. That
+    // is the honest cost of testing the gate end to end, and the earlier
+    // version of this test hid it behind a 5-second default and then
+    // timed out.
+    const configHome = mkdtempSync(join(tmpdir(), "br-authrec-"));
+    const asked: string[] = [];
+    await run({
+      argv: [
+        "scan",
+        "https://shop.example.com",
+        "--max-pages",
+        "1",
+        "--out",
+        mkdtempSync(join(tmpdir(), "br-out-")),
+      ],
+      io: {
+        out: () => {},
+        err: () => {},
+        env: { XDG_CONFIG_HOME: configHome },
+        version: "0.1.0-test",
+        interactive: true,
+        ask: async (question) => {
+          asked.push(question);
+          return "yes";
+        },
+      },
+    });
+
+    expect(asked).toHaveLength(1);
+    // Consent is remembered, so the target is not re-confirmed next time.
+    const record = join(configHome, "browserrecon", "authorization.json");
+    expect(existsSync(record), "the answer was not persisted").toBe(true);
+    expect(JSON.parse(readFileSync(record, "utf8")).confirmedTargets).toContain(
+      "https://shop.example.com",
+    );
+  }, 60_000);
+
+  it("does not ask at all when --i-am-authorized was passed", async () => {
+    // Slow for the same reason the consent test is: getting past the gate
+    // means a real scan attempt follows, and Chrome takes seconds to
+    // start. The default five-second timeout was a bet that it would not.
+    const { asked } = await promptRun("n", [
+      "scan",
+      "https://shop.example.com",
+      "--i-am-authorized",
+      "--max-pages",
+      "1",
+      "--out",
+      mkdtempSync(join(tmpdir(), "br-out-")),
+    ]);
+    expect(asked).toEqual([]);
+  }, 60_000);
 });
