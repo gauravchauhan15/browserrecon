@@ -1,9 +1,9 @@
 # BrowserRecon
 
-Browser runtime reconnaissance. BrowserRecon drives a real Chrome against a
-live application and turns what it observes into a structured attack-surface
-model: the APIs an application actually calls, the workflows those calls form,
-the state the application moves through, and the tools it publishes to AI
+Browser runtime reconnaissance drives a real Chrome against an agentic supported
+live application and turns what it observes into a structured agentic attack-surface
+model: the APIs an application actually called by agents, the workflows those calls form,
+the states that application moves through, and the tools it publishes to AI
 agents.
 
 Local-first. No account, no API key, no cloud service, no telemetry.
@@ -19,9 +19,7 @@ Local-first. No account, no API key, no cloud service, no telemetry.
 
 BrowserRecon drives a real browser against a live application and can be given
 credentials. **Only run it against systems you own or have written
-authorization to test.** The tool requires an explicit authorization
-acknowledgment before its first scan and records that acknowledgment in the
-scan session.
+authorization to test.** 
 
 It does not, and will not, attempt to bypass authentication, CAPTCHAs, WAF
 challenges or bot-detection controls. Barriers are recorded as reconnaissance
@@ -68,7 +66,7 @@ real output from real scans — nothing hand-written — in
 
 A model of the application layer, assembled from runtime signals:
 
-- **Workflows** — reconstructed multi-step journeys with their boundaries,
+- **agentic Workflows** — reconstructed multi-step journeys with their boundaries,
   the evidence that scored them, and a confidence value
 - **API sequences** — ordered, with `caused_by` and `depends_on` relationships
 - **State transitions** — the state graph a workflow moves through
