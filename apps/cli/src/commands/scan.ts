@@ -26,9 +26,13 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import {
   buildSessionAuthorization,
+  createRecord,
   defaultRecordPath,
   evaluateGate,
+  isAffirmative,
   readRecord,
+  withConfirmedTarget,
+  writeRecord,
   nonInteractiveHelp,
   type AcknowledgmentMethod,
 } from "@browserrecon/authorization";
@@ -100,6 +104,14 @@ export interface ScanCommandInput {
   readonly json?: boolean | undefined;
   readonly authorized?: boolean | undefined;
   readonly interactive?: boolean | undefined;
+  /**
+   * Ask the user a question and return what they typed.
+   *
+   * Injected rather than read from `process.stdin` here, for the same reason
+   * `write` and `warn` are: a gate that can only be tested by driving a real
+   * terminal does not get tested. Absent, a prompt is treated as a refusal.
+   */
+  readonly ask?: ((question: string) => Promise<string>) | undefined;
   readonly write: (line: string) => void;
   readonly warn: (line: string) => void;
 }
@@ -168,14 +180,82 @@ export async function scan(input: ScanCommandInput): Promise<void> {
     interactive: input.interactive === true,
     risks,
   });
-  if (gate.kind !== "allowed") {
+  if (gate.kind === "denied") {
     throw new CliError(
-      gate.kind === "denied" ? gate.message : gate.question,
+      gate.message,
       EXIT_CODES.authorization,
-      gate.kind === "denied" ? nonInteractiveHelp(policy.targetOrigin) : undefined,
+      nonInteractiveHelp(policy.targetOrigin),
     );
   }
-  if (gate.notice !== undefined && gate.notice !== "") input.warn(gate.notice);
+
+  const method: AcknowledgmentMethod = gate.kind === "allowed" ? gate.method : "interactive";
+  const recordNeedsUpdate = gate.kind === "allowed" ? gate.recordNeedsUpdate : true;
+
+  if (gate.kind === "prompt") {
+    // The question used to be thrown as though it were an error message: the
+    // terminal printed "Are you authorized to test this target? [y/N]" and
+    // exited, so the documented interactive path had never once worked and
+    // there was no way to answer it. `@browserrecon/authorization` says in
+    // its own header that "prompting and persistence belong to the CLI" —
+    // this is the CLI finally doing both.
+    if (gate.notice !== "") input.warn(gate.notice);
+    if (input.ask === undefined) {
+      throw new CliError(
+        "Authorization is required and there is no way to ask for it here.",
+        EXIT_CODES.authorization,
+        nonInteractiveHelp(policy.targetOrigin),
+      );
+    }
+    const answer = await input.ask(gate.question);
+    if (!isAffirmative(answer)) {
+      // §7.4: anything but an explicit yes is a no, including an empty line.
+      throw new CliError(
+        "Not authorized, so nothing was scanned.",
+        EXIT_CODES.authorization,
+        "Re-run and answer y, or pass --i-am-authorized if you are certain.",
+      );
+    }
+  } else if (gate.notice !== undefined && gate.notice !== "") {
+    input.warn(gate.notice);
+  }
+
+  // Remember the answer, so confirming a target once is enough. Written after
+  // consent and before anything touches the network. This was never called:
+  // `recordNeedsUpdate` was computed by the gate and ignored, so every run
+  // was a first run and the prompt came back every time.
+  //
+  // Two filters, both learned by writing this wrongly first. The first
+  // version persisted every target under every method, and one afternoon of
+  // testing left a permanent file holding forty-eight entries, forty-seven of
+  // them `http://127.0.0.1:<ephemeral-port>` — ports that will never exist
+  // again, recorded for ever.
+  //
+  //  - **Only interactive consent is remembered.** `--i-am-authorized` is an
+  //    assertion about one run. The README tells CI to pass it explicitly
+  //    "rather than relying on a stored acknowledgment", and a flag that
+  //    silently writes that acknowledgment works against exactly that.
+  //  - **Only a durable origin is remembered.** A loopback origin is a
+  //    fixture or a dev server on a port the OS picked this minute. It is
+  //    not a target anyone will confirm again.
+  if (recordNeedsUpdate && method === "interactive" && isDurableOrigin(policy.targetOrigin)) {
+    const recordPath = defaultRecordPath(input.env);
+    const existing = readRecord(recordPath);
+    try {
+      writeRecord(
+        recordPath,
+        existing === undefined
+          ? createRecord(method, policy.targetOrigin)
+          : withConfirmedTarget(existing, policy.targetOrigin),
+      );
+    } catch (error) {
+      // A read-only home directory is not a reason to refuse a scan the user
+      // has just authorized; it only means they will be asked again.
+      input.warn(
+        `Could not record the authorization (${error instanceof Error ? error.message : String(error)}). ` +
+          "You will be asked again next time.",
+      );
+    }
+  }
 
   // ---- 4. the session directory -------------------------------------------
   const outputRoot = (resolved.config.output as { dir?: string } | undefined)?.dir ?? ".output";
@@ -222,7 +302,11 @@ export async function scan(input: ScanCommandInput): Promise<void> {
   const startedAt = new Date().toISOString();
   const policySummary = policySummaryFor(policy, "");
   const authorization = buildSessionAuthorization({
-    method: gate.method as AcknowledgmentMethod,
+    // The method consent actually arrived by — `interactive` when the user
+    // answered the prompt. The cast that used to be here read `gate.method`,
+    // which does not exist on a prompt outcome, so a session recorded after
+    // a prompt would have claimed `undefined`.
+    method,
     targetOrigin: policy.targetOrigin,
     risks,
   });
@@ -957,6 +1041,24 @@ function loadAuthProfile(
   }
 
   return { profile: parsed.profile, secrets: secrets.secrets };
+}
+
+/**
+ * Whether an origin is worth remembering between runs.
+ *
+ * Loopback is not: the port is ephemeral, so the entry can never match again
+ * and only grows the file.
+ */
+function isDurableOrigin(origin: string): boolean {
+  try {
+    const { hostname } = new URL(origin);
+    return (
+      !["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname) &&
+      !hostname.endsWith(".localhost")
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** §10C.1's dimension names, as a reader would say them. */
