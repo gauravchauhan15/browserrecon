@@ -1,6 +1,6 @@
 # BrowserRecon
 
-Browser runtime reconnaissance drives a real Chrome against an agentic supported
+Browser runtime reconnaissance drives a real Chrome against an agent supported/agentic
 live application and turns what it observes into a structured agentic attack-surface
 model: the APIs an application actually called by agents, the workflows those calls form,
 the states that application moves through, and the tools it publishes to AI
