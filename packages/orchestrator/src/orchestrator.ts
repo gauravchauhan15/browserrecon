@@ -286,6 +286,7 @@ export async function runScan(input: ScanInput): Promise<ScanResult> {
           candidate,
           bucket: input.bucket,
           signal: scanAbort.signal,
+          allowanceMs: tracker.pageAllowanceMs(),
         });
         input.queue.markVisited(candidate.url);
         for (const found of result.discovered) input.queue.offer(found);

@@ -62,6 +62,16 @@ export interface VisitContext {
   readonly candidate: Candidate;
   readonly bucket: TokenBucket;
   readonly signal: AbortSignal;
+  /**
+   * This page's share of the scan's clock, re-divided for every page.
+   *
+   * The browsing port decides how to spend it — how long to wait for the
+   * document, how long to wait for the page to go quiet, how many controls
+   * to press. It is a share, not a deadline: nothing here aborts a page that
+   * overruns, because the budget tracker is already the thing that stops the
+   * scan, and two independent clocks would disagree sooner or later.
+   */
+  readonly allowanceMs: number;
 }
 
 export interface VisitResult {

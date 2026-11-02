@@ -31,6 +31,7 @@ export const GAP_REASONS = [
   "probably_dead",
   "blocked_by_barrier",
   "budget_exhausted",
+  "depth_limited",
   "policy_excluded",
 ] as const;
 
@@ -96,6 +97,12 @@ export const REMEDIES: Readonly<Record<GapReason, string | undefined>> = {
     "An access barrier stopped the scan. Barriers are recorded, never circumvented — resolve it at the application or accept the gap.",
   budget_exhausted:
     "The scan ran out of pages or time. Raise the budget, or resume this session.",
+  // Distinct from `budget_exhausted` because the remedy is different and
+  // the reader cannot guess which one applies. "The scan ran out" sends
+  // someone to --max-pages or `resume`, neither of which reaches a URL that
+  // was never queued: the crawl was told how far to go and went that far.
+  depth_limited:
+    "Further from the seed than --max-depth allows. Raise it to reach these; the default of 3 is deliberately shallow.",
   policy_excluded:
     "Excluded by your own policy. Working as intended; listed for transparency.",
 };
@@ -132,6 +139,7 @@ export function prioritise(gap: Omit<CoverageGap, "gap_id" | "priority">): GapPr
   // decision is worth more than something structurally out of reach.
   if (
     gap.reason === "budget_exhausted" ||
+    gap.reason === "depth_limited" ||
     gap.reason === "requires_state" ||
     gap.reason === "requires_role" ||
     gap.reason === "requires_input"

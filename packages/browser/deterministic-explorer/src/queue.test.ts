@@ -111,6 +111,52 @@ describe("every skip has a reason", () => {
   });
 });
 
+describe("crawl depth", () => {
+  const open = { refuse: (): undefined => undefined };
+
+  it("refuses a candidate past the limit", async () => {
+    // Depth was tracked from the first commit and used only to *order* the
+    // queue. Ordering shapes a crawl without bounding it: a paginated
+    // listing could absorb a whole page budget at depth 20 while sections
+    // of the application sat unvisited at depth 2.
+    const queue = createQueue({ ...open, maxDepth: 3 });
+    expect(queue.offer(c("https://a.test/ok", { depth: 3 }))).toBeUndefined();
+    expect(queue.offer(c("https://a.test/deep", { depth: 4 }))?.reason).toBe("depth_exceeded");
+  });
+
+  it("records the refusal rather than dropping it", async () => {
+    // §45: a URL too deep to visit is still a URL the scan found, and
+    // coverage accounting has to be able to say why it was not reached.
+    const queue = createQueue({ ...open, maxDepth: 1 });
+    queue.offer(c("https://a.test/deep", { depth: 9 }));
+    expect(queue.skipped).toHaveLength(1);
+    expect(queue.skipped[0]?.detail).toContain("9");
+    expect(queue.skipped[0]?.detail).toContain("1");
+  });
+
+  it("does not spend a policy check on a candidate already refused", async () => {
+    // Order matters: asking about scope first would consult the engine for
+    // a URL whose fate is decided, and on a deep site that is most of them.
+    let asked = 0;
+    const queue = createQueue({
+      refuse: () => {
+        asked += 1;
+        return undefined;
+      },
+      maxDepth: 2,
+    });
+    queue.offer(c("https://a.test/deep", { depth: 7 }));
+    expect(asked).toBe(0);
+  });
+
+  it("imposes no limit when none is given", async () => {
+    // Absent means unbounded, which is what the queue did before and what
+    // `--max-depth 0` asks for.
+    const queue = createQueue(open);
+    expect(queue.offer(c("https://a.test/deep", { depth: 99 }))).toBeUndefined();
+  });
+});
+
 describe("nothing is visited twice", () => {
   it("refuses a URL already visited", async () => {
     const queue = createQueue(allow);

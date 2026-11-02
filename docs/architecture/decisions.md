@@ -562,3 +562,77 @@ One process note, because it cost a false negative. The probe for the idle
 window _passed_ the first time it was run — the fixture package resolves to
 its build output, and the edit that made the fixture adversarial had not
 been built. A probe run against a stale `dist` proves nothing. Build first.
+
+## The clock is the budget, and pages are what it buys
+
+A scan of the reference application reached one page, which was the operator's own
+`--max-pages 1`. The question it prompted was the better one: what else
+constrains a live scan, and is any of it reachable from the command line?
+
+Most of it was not. The runner already accepted `settleMs`, `drainMs`,
+`navigationTimeoutMs` and `maxInteractionsPerPage` — and the CLI passed none
+of them, so four knobs existed in the type and nowhere else. Two were
+measurably wrong for real applications: a **2-second** wait for the network
+to go quiet on a site whose network never went quiet inside fourteen
+seconds, and a **15-second** document budget against a page that took 24.6s
+to reach `domcontentloaded` cold and headless.
+
+Exposing them as four more flags would have been the obvious fix and the
+wrong one. Nobody can choose a settle time; what an operator actually knows
+is how long they are willing to wait in total. So the runtime budget is now
+**120 minutes**, and the per-page waits are derived from it: the budget
+tracker divides the time remaining by the pages remaining, and the runner
+spends that share — 40% on the document, 25% on quiet, the rest left for the
+harvest, the interactions and the drain.
+
+It re-divides every page, which is what makes it self-correcting rather than
+merely arithmetical: a run whose early pages were slow gives later ones
+less, instead of spending at a rate it can no longer afford and being cut
+off with its queue half-read. The clock is a cap and never a target — a
+queue that empties in ten minutes finishes in ten minutes.
+
+Both ends are clamped. The floor is 20s per page because the reference application needed 24.6s
+to load and published its agentic tools at 26s; below that a page is not
+being scanned quickly, it is being scanned pointlessly. The ceiling stops the
+division from handing the last page of a budget the rest of the afternoon.
+The navigation share is bracketed at 15–60s, which spans where peer tools
+put it: Playwright defaults to 30s, Katana to 10s.
+
+Two hours rather than one because the thing being bought is pages, and a
+modern application costs far more per page than this file's estimate of 50
+requests — the reference application spent 126 on one. An hour at a polite rate buys a sample,
+and workflows and interactions are exactly what a sample misses.
+
+### Depth was tracked for ordering and never used as a limit
+
+`Candidate.depth` existed from the start and fed `compareCandidates` so
+shallower pages went first. Ordering shapes a crawl without bounding it: on a
+site with pagination or faceted search, a page budget can be entirely spent
+at depth 20 of one listing while whole sections sit unvisited at depth 2.
+Every comparable tool exposes a depth limit — Katana defaults to 3, ZAP's
+AJAX Spider to 10 — and this had none at all.
+
+Now `--max-depth`, defaulting to 3, with `0` meaning no limit. It is checked
+after the identity checks and before scope, so a refused candidate does not
+spend a policy decision, and it is recorded as `depth_exceeded` rather than
+dropped. Deliberately **not** profile-driven: how hard to hit a target and
+how far to wander from the seed are independent choices, and a profile
+carrying a depth would mean `--rate-profile polite` quietly reshaped the
+crawl as well as slowing it. That independence is expressed in the type —
+`RateLimits = Omit<Limits, "maxDepth">` — rather than in a comment.
+
+The first end-to-end run showed the other half of the problem. Depth worked,
+and the four skipped URLs arrived in the report as `budget_exhausted`,
+whose remedy is "raise the budget, or resume this session" — neither of
+which reaches a URL that was never queued. A depth limit is not a budget
+running out; it is the crawl being told how far to go and going that far.
+`depth_limited` is its own reason now, with its own remedy.
+
+One gap stated rather than papered over: the _arithmetic_ of the per-page
+split is tested and probe-verified, but the **wiring** — that the runner
+spends the allowance it is handed rather than ignoring it — is covered only
+by types. A probe that makes `visit` discard `allowanceMs` entirely passes
+the whole suite. The runner builds its adapter inside `launch`, so there is
+nowhere to inject a fake one and assert what it was given; adding that seam
+is a change to the runner's shape rather than its behaviour, and it did not
+belong in this pass.

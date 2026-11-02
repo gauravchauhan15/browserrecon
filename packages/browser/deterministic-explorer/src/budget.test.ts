@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_PAGE_ALLOWANCE_MS,
+  MIN_PAGE_ALLOWANCE_MS,
   completenessFor,
   computeEffectiveBudget,
   createBudgetTracker,
@@ -111,6 +113,77 @@ describe("termination", () => {
     tracker.actionFailed();
     tracker.actionFailed();
     expect(tracker.actionFailed()).toBe("max_failed_actions");
+  });
+});
+
+describe("pacing a page's share of the clock", () => {
+  /** A clock the test drives, so pacing is testable without waiting (§36.1). */
+  const at = (times: number[]): (() => number) => {
+    let index = 0;
+    return () => times[Math.min(index++, times.length - 1)] ?? 0;
+  };
+
+  it("divides the time that is left by the pages that are left", async () => {
+    // 120 minutes across 120 pages is a minute each. The point of dividing
+    // rather than fixing the per-page waits is that the arithmetic holds
+    // whatever the budget is — before this, a page got 15s for the document
+    // and 2s of quiet whether the scan had two hours or two minutes.
+    const tracker = createBudgetTracker({
+      budget: budget({ maxPages: 120, maxRuntimeMinutes: 120 }),
+      now: at([0, 0]),
+    });
+    expect(tracker.pageAllowanceMs()).toBe(60_000);
+  });
+
+  it("gives later pages less when earlier ones ran long", async () => {
+    // Self-correcting is the whole reason this re-divides per page rather
+    // than computing a fixed slice up front: a scan whose first pages were
+    // slow would otherwise keep spending at a rate it can no longer afford
+    // and get cut off by the clock with its queue half-read.
+    const clock = at([0, 0, 3_600_000]);
+    const tracker = createBudgetTracker({
+      budget: budget({ maxPages: 120, maxRuntimeMinutes: 120 }),
+      now: clock,
+    });
+    const first = tracker.pageAllowanceMs();
+    for (let i = 0; i < 20; i++) tracker.pageVisited();
+    // Half the clock gone, 100 pages left: 36s each, down from 60s.
+    expect(tracker.pageAllowanceMs()).toBeLessThan(first);
+    expect(tracker.pageAllowanceMs()).toBe(36_000);
+  });
+
+  it("never offers less than a real application needs to load", async () => {
+    // the reference application took 24.6s to reach domcontentloaded cold and headless.
+    // An allowance below the floor is not a fast scan of a page, it is a
+    // scan of a page that has not happened yet.
+    const tracker = createBudgetTracker({
+      budget: budget({ maxPages: 10_000, maxRuntimeMinutes: 1 }),
+      now: at([0, 0]),
+    });
+    expect(tracker.pageAllowanceMs()).toBe(MIN_PAGE_ALLOWANCE_MS);
+  });
+
+  it("does not hand the last page everything that is left", async () => {
+    // Arithmetically "all the remaining time, for one page" is correct and
+    // operationally useless — a two-hour budget with one page to go would
+    // sit on a single screen for the rest of the afternoon.
+    const tracker = createBudgetTracker({
+      budget: budget({ maxPages: 1, maxRuntimeMinutes: 120 }),
+      now: at([0, 0]),
+    });
+    expect(tracker.pageAllowanceMs()).toBe(MAX_PAGE_ALLOWANCE_MS);
+  });
+
+  it("still offers the floor once the clock has run out", async () => {
+    // The tracker is what stops the scan; the allowance is only advice on
+    // how to spend a page. Returning 0 here would have the runner give a
+    // page no navigation budget at all and report it as failed, turning a
+    // clean "out of time" into a page that looks broken.
+    const tracker = createBudgetTracker({
+      budget: budget({ maxPages: 120, maxRuntimeMinutes: 1 }),
+      now: at([0, 999_999]),
+    });
+    expect(tracker.pageAllowanceMs()).toBe(MIN_PAGE_ALLOWANCE_MS);
   });
 });
 

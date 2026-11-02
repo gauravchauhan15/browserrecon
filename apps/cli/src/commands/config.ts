@@ -113,8 +113,13 @@ export function configValidate(input: ConfigValidateInput): void {
       `concurrency ${policy.limits.maxConcurrency}`,
   );
   input.write(
+    // Depth belongs on this line and not under `effective`: it bounds the
+    // crawl's shape rather than its size, so it does not enter the
+    // pages-versus-time arithmetic — but leaving it out entirely would hide
+    // the limit most likely to explain a scan that found less than expected.
     `  limits            ${policy.limits.maxPages} pages, ` +
-      `${policy.limits.maxRuntimeMinutes} minutes`,
+      `${policy.limits.maxRuntimeMinutes} minutes, ` +
+      `${policy.limits.maxDepth === 0 ? "any depth" : `depth ${policy.limits.maxDepth}`}`,
   );
   input.write(`  effective         ~${budget.effectivePages} pages (${budget.binding}-bound)`);
   if (budget.maxPagesUnreachable) {

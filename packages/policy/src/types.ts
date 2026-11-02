@@ -61,6 +61,16 @@ export interface Limits {
   readonly maxConcurrency: number;
   readonly maxPages: number;
   readonly maxRuntimeMinutes: number;
+  /**
+   * How many links from the seed the crawl may follow. 0 means no limit.
+   *
+   * A budget in the same sense as the others, but it bounds the crawl's
+   * *shape* rather than its size: the page budget decides how much is
+   * visited, this decides what kind of thing gets visited. Without it, depth
+   * only ordered the queue, so a paginated listing could absorb a whole scan
+   * at depth 20 while sections of the application sat unvisited at depth 2.
+   */
+  readonly maxDepth: number;
 }
 
 /** Exploration depth. Independent of rate (§8.3). */

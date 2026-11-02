@@ -60,6 +60,7 @@ export const SKIP_REASONS = [
   "not_http",
   "duplicate_in_queue",
   "budget_exhausted",
+  "depth_exceeded",
 ] as const;
 
 export type SkipReason = (typeof SKIP_REASONS)[number];
@@ -94,6 +95,21 @@ export function compareCandidates(a: Candidate, b: Candidate): number {
 export interface QueueOptions {
   /** Decides scope. Returns undefined to allow, or a reason to refuse. */
   readonly refuse: (url: string) => { reason: SkipReason; detail: string } | undefined;
+  /**
+   * How many links from the seed a candidate may be. Undefined means no cap.
+   *
+   * Depth was tracked from the start and used only to *order* the queue —
+   * shallower first — which shapes a crawl without ever bounding it. On a
+   * site with pagination or faceted search that is the difference between a
+   * crawl and a walk: the budget is spent on page 40 of a listing while
+   * whole sections of the application are still unvisited at depth 2.
+   *
+   * Every comparable tool exposes this and most default it low — Katana 3,
+   * ZAP's AJAX Spider 10 — because the useful surface of an application is
+   * overwhelmingly shallow and the long tail is overwhelmingly the same page
+   * with a different query string.
+   */
+  readonly maxDepth?: number | undefined;
 }
 
 export interface VisitQueue {
@@ -144,6 +160,21 @@ export function createQueue(options: QueueOptions): VisitQueue {
         // visited, just not twice. Counting it would inflate the "we did not
         // reach this" number coverage reads.
         return { url: candidate.url, reason: "duplicate_in_queue", source: candidate.source };
+      }
+
+      // After the identity checks and before scope: a URL too deep to visit
+      // is still a URL the scan *found*, and §45 wants it recorded with the
+      // reason rather than dropped. Asking the policy about it first would
+      // only spend a check on a candidate already decided.
+      if (options.maxDepth !== undefined && candidate.depth > options.maxDepth) {
+        const skip: Skipped = {
+          url: candidate.url,
+          reason: "depth_exceeded",
+          detail: `depth ${candidate.depth} is past the limit of ${options.maxDepth}`,
+          source: candidate.source,
+        };
+        skipped.push(skip);
+        return skip;
       }
 
       const refusal = options.refuse(candidate.url);

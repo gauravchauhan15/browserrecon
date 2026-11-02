@@ -20,6 +20,7 @@ import {
   type TargetPolicy,
 } from "./types.js";
 import {
+  DEFAULT_MAX_DEPTH,
   DEFAULT_RATE_PROFILE,
   DEFAULT_THOROUGHNESS_LEVEL,
   RATE_PROFILES,
@@ -100,6 +101,13 @@ export const POLICY_SPEC: ConfigSpec = [
     min: 0,
     max: 1440,
     cli: "timeout-minutes",
+  }),
+  num("policy.limits.maxDepth", "Links deep from the seed. 0 means no limit.", {
+    default: DEFAULT_MAX_DEPTH,
+    min: 0,
+    max: 32,
+    integer: true,
+    cli: "max-depth",
   }),
 
   bool("policy.agent.stateChangingActions", "Permit actions that change application state.", {
@@ -246,6 +254,11 @@ export function resolveTargetPolicy(input: ResolvePolicyInput): PolicyResolution
     return { ok: false, violations };
   }
 
+  const depthOf = (value: unknown): number =>
+    typeof value === "number" && Number.isInteger(value) && value >= 0
+      ? value
+      : DEFAULT_MAX_DEPTH;
+
   const pick = (path: string, fallback: number): number => {
     const value = readPath(config, path);
     return typeof value === "number" && value > 0 ? value : fallback;
@@ -285,6 +298,9 @@ export function resolveTargetPolicy(input: ResolvePolicyInput): PolicyResolution
         maxConcurrency: pick("policy.limits.maxConcurrency", profile.maxConcurrency),
         maxPages: pick("policy.limits.maxPages", profile.maxPages),
         maxRuntimeMinutes: pick("policy.limits.maxRuntimeMinutes", profile.maxRuntimeMinutes),
+        // Not `pick`: 0 is a meaningful answer here ("no limit"), not the
+        // "fall back to the profile" sentinel it is for the budgets above.
+        maxDepth: depthOf(readPath(config, "policy.limits.maxDepth")),
       },
       thoroughness: {
         instancesPerTemplate: pick(

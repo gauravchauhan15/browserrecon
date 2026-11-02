@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultTargetPolicy, resolveTargetPolicy, POLICY_SPEC } from "./resolve.js";
 import { elevatedRisks, isMutating, MUTATING_METHODS } from "./types.js";
-import { RATE_PROFILES, computeEffectiveBudget } from "./profiles.js";
+import { DEFAULT_MAX_DEPTH, RATE_PROFILES, computeEffectiveBudget } from "./profiles.js";
 import { loadConfig } from "@browserrecon/config";
 
 const policyOf = (origin = "https://shop.example.com") => {
@@ -79,7 +79,22 @@ describe("default posture", () => {
   });
 
   it("uses the normal rate profile, never aggressive", () => {
-    expect(policyOf().limits).toEqual(RATE_PROFILES.normal);
+    const { maxDepth, ...rateLimits } = policyOf().limits;
+    expect(rateLimits).toEqual(RATE_PROFILES.normal);
+    // Destructured out rather than ignored: depth is not a rate decision
+    // (§8.3), so it is absent from every profile and compared separately.
+    // Asserting the whole object against the profile would silently start
+    // passing again the moment someone added a depth to one.
+    expect(maxDepth).toBe(DEFAULT_MAX_DEPTH);
+  });
+
+  it("keeps crawl depth out of the rate profiles entirely", () => {
+    // The two are separate dials (§8.3). A profile that carried a depth
+    // would mean asking to be gentle also quietly reshaped the crawl, so
+    // the assertion is that no profile mentions one at all.
+    for (const [name, limits] of Object.entries(RATE_PROFILES)) {
+      expect(limits, `${name} profile carries a crawl depth`).not.toHaveProperty("maxDepth");
+    }
   });
 
   it("reports no elevated risk at all", () => {

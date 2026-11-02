@@ -35,38 +35,74 @@ export const ESTIMATED_REQUESTS_PER_PAGE = 50;
  * by roughly 70x, so the time budget always bound first and anyone reading
  * the config badly misjudged what a scan would do.
  *
- * `maxPages` here is sized for a 60-minute run at the profile's rate. For
- * reference, the closest peer tools are other browser-driven crawlers, not
- * port scanners: Burp's built-in configurations cap a crawl at roughly 30
- * minutes and 1,500 unique locations, and ZAP's AJAX Spider defaults to 60
- * minutes.
+ * `maxPages` here is sized for a **120-minute** run at the profile's rate.
+ * For reference, the closest peer tools are other browser-driven crawlers,
+ * not port scanners: Burp's built-in configurations cap a crawl at roughly
+ * 30 minutes and 1,500 unique locations, and ZAP's AJAX Spider defaults to
+ * 60 minutes.
+ *
+ * Two hours rather than one, because the budget that matters for this tool
+ * is wall-clock and the thing it is spent on is *pages*. A modern
+ * application costs far more per page than a document-and-links crawler
+ * assumes — the reference application spent 126 requests on a single page against the 50
+ * this file estimates — so an hour at a polite rate buys a sample, not a
+ * crawl, and workflows and interactions are exactly what a sample misses.
+ *
+ * The clock is a cap, never a target: the scan paces itself to fit inside
+ * it (`pageAllowanceMs`) and stops the moment the queue runs dry. A site
+ * small enough to finish in ten minutes still finishes in ten minutes.
  */
-export const RATE_PROFILES: Readonly<Record<RateProfile, Limits>> = {
+/**
+ * The budgets a rate profile decides.
+ *
+ * `maxDepth` is deliberately absent: how hard to hit a target and how far
+ * to wander from the seed are independent choices (§8.3), and a profile
+ * that carried a depth would make `--rate-profile polite` quietly reshape
+ * the crawl as well as slow it. Expressed in the type so the next person to
+ * tune these cannot add one by accident.
+ */
+export type RateLimits = Omit<Limits, "maxDepth">;
+
+export const RATE_PROFILES: Readonly<Record<RateProfile, RateLimits>> = {
   /** First contact with an unfamiliar or production target. */
   polite: {
     maxRequestsPerSecond: 1,
     maxConcurrency: 1,
-    maxPages: 60,
-    maxRuntimeMinutes: 60,
+    maxPages: 120,
+    maxRuntimeMinutes: 120,
   },
   /** Default. Balanced, in the spirit of Nmap's `-T3`. */
   normal: {
     maxRequestsPerSecond: 5,
     maxConcurrency: 2,
-    maxPages: 300,
-    maxRuntimeMinutes: 60,
+    maxPages: 600,
+    maxRuntimeMinutes: 120,
   },
   /** Explicit opt-in, for a target you control and have load-tested (§7.4). */
   aggressive: {
     maxRequestsPerSecond: 15,
     maxConcurrency: 4,
-    maxPages: 800,
-    maxRuntimeMinutes: 60,
+    maxPages: 1600,
+    maxRuntimeMinutes: 120,
   },
 };
 
 /** The default profile is `normal` — never `aggressive`. */
 export const DEFAULT_RATE_PROFILE: RateProfile = "normal";
+
+/**
+ * Links deep from the seed, by default.
+ *
+ * Three, which is Katana's default and the shallow end of what peer tools
+ * ship. An application's distinct surface is overwhelmingly shallow; past
+ * depth three the crawl is mostly finding the same template again with a
+ * different id, which §9.5.3's instance sampling is the right tool for and
+ * a page budget is not. Not profile-driven: how hard to hit a target and how
+ * far to wander from the seed are independent choices (§8.3), and fusing
+ * them would mean `--rate-profile polite` quietly changed the shape of the
+ * crawl as well as its speed.
+ */
+export const DEFAULT_MAX_DEPTH = 3;
 
 /**
  * How many instances of a route template to sample (§9.5.3).
@@ -105,7 +141,7 @@ export interface EffectiveBudget {
  * requires the tool to do the arithmetic and print it at scan start. This is
  * that calculation; rendering is the CLI's job.
  */
-export function computeEffectiveBudget(limits: Limits): EffectiveBudget {
+export function computeEffectiveBudget(limits: RateLimits): EffectiveBudget {
   const requestsAvailable = limits.maxRequestsPerSecond * limits.maxRuntimeMinutes * 60;
   const pagesReachable = Math.floor(requestsAvailable / ESTIMATED_REQUESTS_PER_PAGE);
   const timeBound = pagesReachable < limits.maxPages;

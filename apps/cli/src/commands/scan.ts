@@ -360,6 +360,9 @@ export async function scan(input: ScanCommandInput): Promise<void> {
       if (decision.allowed) return undefined;
       return { reason: skipReasonFor(decision.reason), detail: decision.detail };
     },
+    // 0 is "no limit" at the policy layer and `undefined` at the queue's,
+    // which is the same answer said in each layer's own vocabulary.
+    ...(policy.limits.maxDepth > 0 ? { maxDepth: policy.limits.maxDepth } : {}),
   });
 
   const runner = createRunner({
@@ -625,6 +628,7 @@ function gapInputs(
       return "policy_excluded";
     }
     if (reason === "not_http") return "not_navigable";
+    if (reason === "depth_exceeded") return "depth_limited";
     if (reason.includes("destructive") || reason.includes("state_changing"))
       return "requires_state";
     if (reason === "authentication_form") return "requires_role";

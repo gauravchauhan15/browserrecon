@@ -170,11 +170,15 @@ describe("§10C.7: every gap carries a reason", () => {
     ...over,
   });
 
-  it("covers all eight reasons", () => {
-    expect(GAP_REASONS).toHaveLength(8);
-    for (const reason of GAP_REASONS) {
-      expect(Object.keys(REMEDIES)).toContain(reason);
-    }
+  it("covers all nine reasons, and invents none", () => {
+    // The count is deliberate friction: adding a reason should require
+    // looking at this test and deciding what it means, not just compiling.
+    expect(GAP_REASONS).toHaveLength(9);
+    // Both directions. The original only checked that every reason had a
+    // remedy, which a remedy for a reason that no longer exists passes
+    // happily — and that is how a table ends up with an entry nothing can
+    // ever reach.
+    expect([...GAP_REASONS].sort()).toEqual(Object.keys(REMEDIES).sort());
   });
 
   it("gives a remedy for every reason a user can act on", () => {

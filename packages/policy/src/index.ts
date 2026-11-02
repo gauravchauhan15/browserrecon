@@ -27,6 +27,7 @@ export type {
 } from "./types.js";
 
 export {
+  DEFAULT_MAX_DEPTH,
   DEFAULT_RATE_PROFILE,
   DEFAULT_THOROUGHNESS_LEVEL,
   ESTIMATED_REQUESTS_PER_PAGE,

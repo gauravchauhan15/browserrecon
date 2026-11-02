@@ -103,11 +103,76 @@ function originOf(url: string): string {
   }
 }
 
-const DEFAULT_SETTLE_MS = 2_000;
 const DEFAULT_DRAIN_MS = 400;
 const DEFAULT_MAX_INTERACTIONS = 6;
 /** A click's own settle budget. Shorter than a navigation's: most do little. */
 const INTERACTION_SETTLE_MS = 1_000;
+
+/**
+ * How a page's share of the clock is spent (§8.3).
+ *
+ * The caller hands down one number — this page's slice of the time the scan
+ * has left — and these decide what it buys. Before this, the two waits were
+ * fixed at 15s for the document and 2s for the network to go quiet, which
+ * had no relationship to the budget and were measurably wrong in both
+ * directions: the reference application needed 24.6s to reach `domcontentloaded` cold, and
+ * a static fixture does not need two seconds of silence to prove it is idle.
+ *
+ * The shares do not add to 1. What is left over pays for the harvest, the
+ * interactions and the telemetry drain, none of which should be squeezed by
+ * a page that spent its whole slice loading.
+ *
+ * The clamps are the market's numbers rather than this file's opinion:
+ * Playwright's default navigation timeout is 30s and Katana's is 10s, so a
+ * floor at 15s and a ceiling at 60s brackets what peer tools consider
+ * reasonable. An explicit `settleMs` or `navigationTimeoutMs` still wins —
+ * pacing is a default, not a policy.
+ */
+const NAVIGATION_SHARE = 0.4;
+const SETTLE_SHARE = 0.25;
+const MIN_NAVIGATION_MS = 15_000;
+const MAX_NAVIGATION_MS = 60_000;
+const MIN_SETTLE_MS = 2_000;
+const MAX_SETTLE_MS = 30_000;
+/** Used when the caller paces nothing, which only tests and direct use do. */
+const DEFAULT_PAGE_ALLOWANCE_MS = 30_000;
+
+function share(allowanceMs: number, fraction: number, low: number, high: number): number {
+  return Math.min(high, Math.max(low, Math.round(allowanceMs * fraction)));
+}
+
+/** What a page's share of the clock buys. */
+export interface PageTimings {
+  readonly navigationMs: number;
+  readonly settleMs: number;
+}
+
+/**
+ * Turn a page's time allowance into the two waits that spend it.
+ *
+ * Exported and pure so the arithmetic is testable on its own. The wiring
+ * that calls it is covered by types rather than by a test: the runner builds
+ * its adapter inside `launch`, so there is nowhere to inject a fake one and
+ * assert what it was handed. A seam for that is worth adding; it is a change
+ * to the runner's shape rather than to its behaviour, so it is not smuggled
+ * in here.
+ */
+export function pageTimings(
+  allowanceMs: number | undefined,
+  overrides: {
+    readonly navigationTimeoutMs?: number | undefined;
+    readonly settleMs?: number | undefined;
+  } = {},
+): PageTimings {
+  const allowance = allowanceMs ?? DEFAULT_PAGE_ALLOWANCE_MS;
+  return {
+    navigationMs:
+      overrides.navigationTimeoutMs ??
+      share(allowance, NAVIGATION_SHARE, MIN_NAVIGATION_MS, MAX_NAVIGATION_MS),
+    settleMs:
+      overrides.settleMs ?? share(allowance, SETTLE_SHARE, MIN_SETTLE_MS, MAX_SETTLE_MS),
+  };
+}
 
 export interface Runner {
   launch(): Promise<void>;
@@ -126,6 +191,11 @@ export interface Runner {
     readonly candidate: Candidate;
     readonly bucket: TokenBucket;
     readonly signal?: AbortSignal | undefined;
+    /**
+     * This page's share of the scan's clock (§8.3), divided by the budget
+     * tracker. Absent means "no pacing information", not "no time".
+     */
+    readonly allowanceMs?: number | undefined;
   }): Promise<VisitOutcome>;
   close(): Promise<void>;
   /** Everything harvested, so a report can name forms it declined to submit. */
@@ -299,12 +369,19 @@ export function createRunner(options: RunnerOptions): Runner {
       });
     },
 
-    async visit({ candidate, bucket, signal }) {
+    async visit({ candidate, bucket, signal, allowanceMs }) {
       const currentAdapter = adapter;
       const currentTelemetry = telemetry;
       if (currentAdapter === undefined || currentTelemetry === undefined) {
         throw new RunnerBrowserCrash("the browser is not running");
       }
+
+      const { navigationMs, settleMs } = pageTimings(allowanceMs, {
+        ...(options.navigationTimeoutMs === undefined
+          ? {}
+          : { navigationTimeoutMs: options.navigationTimeoutMs }),
+        ...(options.settleMs === undefined ? {} : { settleMs: options.settleMs }),
+      });
 
       // Before the navigation, not after.
       await bucket.acquire();
@@ -319,7 +396,9 @@ export function createRunner(options: RunnerOptions): Runner {
         };
       }
 
-      const navigation = await currentAdapter.navigate(candidate.url);
+      const navigation = await currentAdapter.navigate(candidate.url, {
+        timeoutMs: navigationMs,
+      });
       if (navigation.status === "denied") {
         // Policy said no. The queue should not have offered it, so the
         // disagreement between the two checks is itself worth reporting —
@@ -364,7 +443,7 @@ export function createRunner(options: RunnerOptions): Runner {
       // Settling is best-effort by design: a page that never goes quiet —
       // polling, a websocket, an animation — is normal, and waiting forever
       // for one is how a scan of a real application never finishes.
-      await currentAdapter.waitForSettled({ timeoutMs: options.settleMs ?? DEFAULT_SETTLE_MS });
+      await currentAdapter.waitForSettled({ timeoutMs: settleMs });
 
       const harvested = await currentAdapter.harvest();
       if (harvested.status === "failed" && harvested.kind === "browser_closed") {
