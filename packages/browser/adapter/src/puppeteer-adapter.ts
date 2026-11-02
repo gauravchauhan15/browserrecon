@@ -57,6 +57,8 @@ import {
 
 const DEFAULT_ACTION_TIMEOUT_MS = 15_000;
 const DEFAULT_SETTLE_TIMEOUT_MS = 5_000;
+/** Has to outlast `readHarvest`'s registry wait, which is up to 15s. */
+const DEFAULT_HARVEST_TIMEOUT_MS = 30_000;
 
 /**
  * Bound a driver call that takes no timeout of its own.
@@ -108,7 +110,102 @@ export function policyActionFor(action: AdapterAction): string {
   return POLICY_ACTION[action] ?? action;
 }
 
-function readHarvest(): Omit<PageHarvest, "url"> {
+async function readHarvest(): Promise<Omit<PageHarvest, "url">> {
+  /**
+   * Wait for the tool registry to stop changing before reading anything.
+   *
+   * A registry is published by script, not by markup, and the scripts that
+   * publish one run late. A harvest timed from `domcontentloaded` reads the
+   * page before any of that and finds nothing, which the report then printed
+   * as "this page published no tools": §45's mistake of reporting the
+   * unobserved as the absent, about the one part of the surface that never
+   * appears in traffic and so has nothing else to contradict it.
+   *
+   * The numbers below come from measuring the reference application rather than taste —
+   * headless, cold, from the start of navigation:
+   *
+   *   15.3s  `navigator.modelContext` exists, holding **zero** tools
+   *   23.2s  two tools
+   *   26.0s  all five
+   *
+   * Two things follow. Registration is not an event but a trickle, with
+   * gaps — 7.9s from the registry appearing to its first tool, 2.8s from two
+   * tools to five — so "the count held still briefly" means nothing; the
+   * first version of this used 500ms and harvested two of the five. And a
+   * registry's existence says nothing about its contents: at 15.3s it was
+   * there and empty, which is the state most likely to be read as "no tools"
+   * by anything that checks once.
+   *
+   * So: wait for the count to go idle, not merely to pause. "No registry"
+   * and "no registry *yet*" are the same observation, so the two cases get
+   * different budgets — a page that has published one is worth waiting on,
+   * and a page that has not should not pay for it.
+   */
+  const REGISTRY_IDLE_MS = 3_000;
+  const REGISTRY_MAX_MS = 15_000;
+  const REGISTRY_ABSENT_MAX_MS = 5_000;
+  const REGISTRY_GRACE_MS = 2_000;
+  const REGISTRY_POLL_MS = 250;
+
+  /** Re-read each poll: the point is to catch a registry that is not there yet. */
+  const readRegistries = (): [string, unknown][] => [
+    ["navigator.modelContext", (navigator as unknown as Record<string, unknown>).modelContext],
+    ["navigator.mcp", (navigator as unknown as Record<string, unknown>).mcp],
+    ["window.agent", (window as unknown as Record<string, unknown>).agent],
+  ];
+
+  /** Any container the `tools` property might be, as key/value pairs. */
+  const entriesOf = (tools: unknown): [unknown, unknown][] => {
+    if (tools instanceof Map) return [...tools.entries()];
+    if (Array.isArray(tools)) return tools.map((value, index) => [index, value]);
+    if (tools instanceof Set) return [...tools].map((value, index) => [index, value]);
+    if (typeof tools === "object" && tools !== null) return Object.entries(tools);
+    return [];
+  };
+
+  /** Tools across every registry, or `undefined` when there is no registry. */
+  const toolCount = (): number | undefined => {
+    let total: number | undefined;
+    for (const [, value] of readRegistries()) {
+      if (value === undefined || value === null) continue;
+      total = (total ?? 0) + entriesOf((value as { tools?: unknown }).tools).length;
+    }
+    return total;
+  };
+
+  const started = Date.now();
+  let previous = toolCount();
+  let registrySeen = previous !== undefined;
+  let lastChange = started;
+  let stillFilling = false;
+
+  for (;;) {
+    const now = Date.now();
+    const cap = registrySeen ? REGISTRY_MAX_MS : REGISTRY_ABSENT_MAX_MS;
+    if (now - started >= cap) {
+      // Out of budget with tools still arriving. Reported rather than
+      // rounded off: a truncated list that looks complete is the same
+      // failure as an empty one that looks complete.
+      stillFilling = registrySeen;
+      break;
+    }
+    if (registrySeen) {
+      if (previous !== undefined && previous > 0 && now - lastChange >= REGISTRY_IDLE_MS) break;
+    } else if (document.readyState === "complete" && now - started >= REGISTRY_GRACE_MS) {
+      // `complete` on its own is not enough: a page can finish loading with
+      // the registry still a timer away, which the fixture caught by
+      // registering 400ms after the document was done.
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, REGISTRY_POLL_MS));
+    const current = toolCount();
+    if (current !== previous) {
+      lastChange = Date.now();
+      previous = current;
+    }
+    registrySeen = registrySeen || current !== undefined;
+  }
+
   const links: string[] = [];
   const seen = new Set<string>();
   for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
@@ -265,20 +362,11 @@ function readHarvest(): Omit<PageHarvest, "url"> {
    */
   const MAX_TOOLS = 100;
   const MAX_SCHEMA_CHARS = 8_000;
-  const registries: readonly [string, unknown][] = [
-    ["navigator.modelContext", (navigator as unknown as Record<string, unknown>).modelContext],
-    ["navigator.mcp", (navigator as unknown as Record<string, unknown>).mcp],
-    ["window.agent", (window as unknown as Record<string, unknown>).agent],
-  ];
-
-  /** Any container the `tools` property might be, as key/value pairs. */
-  const entriesOf = (tools: unknown): [unknown, unknown][] => {
-    if (tools instanceof Map) return [...tools.entries()];
-    if (Array.isArray(tools)) return tools.map((value, index) => [index, value]);
-    if (tools instanceof Set) return [...tools].map((value, index) => [index, value]);
-    if (typeof tools === "object" && tools !== null) return Object.entries(tools);
-    return [];
-  };
+  // Read once more, now that the wait above has given a late registry its
+  // chance. `readRegistries` and `entriesOf` are shared with that wait so the
+  // two cannot drift: a registry name added to one and not the other is a
+  // registry that is waited for and never read, or read and never waited for.
+  const registries = readRegistries();
 
   /** The public descriptor, which may be the value or may be wrapped. */
   const descriptorOf = (value: unknown): Record<string, unknown> => {
@@ -356,7 +444,14 @@ function readHarvest(): Omit<PageHarvest, "url"> {
     }
   }
 
-  return { links, forms, controls, webmcpTools, webmcpRegistriesSeen: registriesSeen };
+  return {
+    links,
+    forms,
+    controls,
+    webmcpTools,
+    webmcpRegistriesSeen: registriesSeen,
+    webmcpStillFilling: stillFilling,
+  };
 }
 
 function withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
@@ -568,6 +663,10 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
     const refusal = this.#check("navigate", { url, ...options });
     if (refusal) return refusal;
 
+    // Captured before the attempt, so the timeout path below can tell a
+    // document that committed slowly from one that never committed at all.
+    const before = this.#page.url();
+
     try {
       const response = await this.#page.goto(url, {
         timeout: options.timeoutMs ?? this.#timeout,
@@ -597,6 +696,35 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
       });
     } catch (error) {
       const { kind, detail } = classify(error);
+
+      // A navigation that ran out of time with a document already committed
+      // is a slow page, not a failed one — and discarding it discards the
+      // whole scan of that page. the reference application took longer than the action
+      // budget to reach `domcontentloaded`; the browser had the document, was
+      // still fetching chunks when the deadline passed, and the run reported
+      // "no page was loaded" over a log holding 126 requests and 23 bundles.
+      //
+      // So: keep what committed and say it was cut short. Nothing else is
+      // relaxed — an out-of-scope landing is still denied, and a timeout with
+      // nothing committed is still a failure.
+      //
+      // "Committed" means the browser's URL *changed during this attempt*.
+      // `!== "about:blank"` is not enough: a navigation that times out before
+      // it commits leaves the previous page in the tab, and accepting that is
+      // how a scan comes to report a page the browser never opened — with the
+      // last page's links, forms and tools filed under the new URL.
+      if (kind === "timeout") {
+        const landed = this.#page.url();
+        if (landed !== "" && landed !== "about:blank" && landed !== before) {
+          const afterRedirect = this.#engine.canVisit(landed);
+          if (!afterRedirect.allowed) {
+            await this.#page.goto("about:blank").catch(() => undefined);
+            return denied("navigate", afterRedirect);
+          }
+          return ok({ url: landed, redirected: landed !== url, loadTimedOut: true });
+        }
+      }
+
       return failed("navigate", kind, detail);
     }
   }
@@ -746,7 +874,12 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
     const refusal = this.#check("harvest", { ...options });
     if (refusal) return refusal;
 
-    const timeout = options.timeoutMs ?? this.#timeout;
+    // A harvest is not an action like a click: it waits in the page for the
+    // tool registry to go idle, which on a real application takes longer than
+    // the action budget. Sharing that budget would mean the deadline fires
+    // mid-wait and the whole page read is lost — a timeout reported where a
+    // slow registry was the only problem.
+    const timeout = options.timeoutMs ?? DEFAULT_HARVEST_TIMEOUT_MS;
     try {
       // `evaluate` is given a function, never a string. Puppeteer evaluates
       // a string as an *expression*, which silently returns the function

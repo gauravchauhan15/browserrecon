@@ -365,6 +365,52 @@ describe("oversized payloads", () => {
     expect(await bodies.get(event.payload)).toEqual(original);
   });
 
+  it("hands a consumer the real payload when asked to resolve", async () => {
+    // Without this, §22.2's growth control silently deletes the largest
+    // events from every analysis downstream. The *whole* payload moves out,
+    // not just its body, so an externalized response reaches a consumer with
+    // no url, no mime type and no body — and is counted as a response that
+    // carried nothing rather than as one that was stored elsewhere.
+    //
+    // A real scan externalized its eight largest responses, the application's
+    // main bundle among them, and the static pass read the 113 small chunks
+    // and none of the files the application actually lives in.
+    const d = dir();
+    const original = { url: "https://shop.example.com/main.js", body: "z".repeat(1000) };
+    const s = store(d, { maxInlinePayloadBytes: 200 });
+    s.append(envelope(1, original));
+    s.close();
+
+    const [event] = await readAllEvents(d, { resolveExternal: true });
+    expect(event?.payload).toEqual(original);
+  });
+
+  it("leaves the reference in place when the body file is gone", async () => {
+    // A body store missing a file must not end the read: everything after it
+    // is still evidence. The caller sees the reference, which is what it had
+    // to tolerate before resolution existed at all.
+    const d = dir();
+    const s = store(d, { maxInlinePayloadBytes: 200 });
+    s.append(envelope(1, { body: "z".repeat(1000) }));
+    s.append(envelope(2, { small: true }));
+    s.close();
+
+    const { rmSync, readdirSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const bodyDir = sessionPaths(d).bodies;
+    for (const name of readdirSync(bodyDir)) rmSync(join(bodyDir, name));
+
+    const problems: string[] = [];
+    const events = await readAllEvents(d, {
+      resolveExternal: true,
+      onProblem: (problem) => problems.push(problem.detail),
+    });
+
+    expect(events).toHaveLength(2);
+    expect(isExternalBodyRef(events[0]?.payload)).toBe(true);
+    expect(problems.join(" ")).toContain("could not be read");
+  });
+
   it("stores identical bodies once", async () => {
     // Content addressing gets deduplication for free: the same API response
     // observed on every visit costs one file, not one per event.

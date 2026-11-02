@@ -181,15 +181,156 @@ describe("only application traffic reaches the model", () => {
   });
 
   it("excludes third-party traffic it cannot classify, rather than guessing", () => {
-    // `unknown` is not `application_api`, and the default filter keeps only
-    // the latter. A classifier that guessed "probably an API" for anything
-    // third-party would put another site's endpoints in this one's surface.
+    // `unknown` is not an API role, and nothing promotes it. A classifier
+    // that guessed "probably an API" for anything third-party would put
+    // another site's endpoints in this one's surface.
+    //
+    // The distinguishing fact is the payload: this response carries none,
+    // so there is nothing to say it is an endpoint rather than a widget's
+    // own business.
     const model = build([
       ...call(`${ORIGIN}/api/cart`),
-      ...call("https://widget.example.net/embed/config"),
+      ...call("https://widget.example.net/embed/config", { mimeType: "text/html" }),
     ]);
     expect(model.apis).toHaveLength(1);
     expect(model.excluded).toContainEqual({ role: "unknown", count: 1 });
+  });
+
+  it("keeps a third-party JSON endpoint, labelled as one", () => {
+    // The other half of the same rule. A JSON body fetched by application
+    // code is an endpoint whoever runs the host: it takes parameters, it
+    // answers to this page, and leaving it out was how an application's own
+    // API gateway — one subdomain over, so not an origin match — went
+    // missing from its inventory.
+    //
+    // Its own role rather than `application_api`, so workflow detection and
+    // the coverage denominator can keep excluding it by name.
+    const model = build([...call("https://api.vendor.example/v1/segment", { method: "POST" })]);
+    expect(model.apis).toHaveLength(1);
+    expect(model.apis[0]?.role).toBe("third_party_api");
+  });
+
+  it("treats a host one subdomain over as the application's own", () => {
+    // `https://shop.example.com` serving pages and `api.example.com`
+    // serving its endpoints is the normal shape of a real application, and
+    // origin equality alone called the second one somebody else's.
+    const model = build([...call("https://api.example.com/v1/cart")]);
+    expect(model.apis[0]?.role).toBe("application_api");
+  });
+
+  it("keeps authentication endpoints, which workflow detection asks for", () => {
+    // §17A.3 lists `auth_infrastructure` under workflow detection, and the
+    // model's default filter used to drop it before any consumer could ask
+    // — so a login POST, the most interesting request on most
+    // applications, could not appear in the inventory at all.
+    const model = build([...call(`${ORIGIN}/auth/login`, { method: "POST" })]);
+    expect(model.apis).toHaveLength(1);
+    expect(model.apis[0]?.role).toBe("auth_infrastructure");
+  });
+});
+
+describe("a request the scan never saw answered", () => {
+  /** A request with no response — the scan ended while it was in flight. */
+  function unanswered(url: string, resourceType = "Fetch"): EventEnvelope {
+    return event("network_request", {
+      requestId: `r${sequence + 1}`,
+      url,
+      method: "GET",
+      resourceType,
+      initiator: { type: "script", stack: [`f@${ORIGIN}/app.js:1:1`] },
+    });
+  }
+
+  it("is still an endpoint the application called", () => {
+    // §45: no silent loss. The model only ever opened a bucket on the
+    // response, so a call whose answer had not arrived when the budget ran
+    // out vanished — counted in `unanswered` and listed nowhere.
+    //
+    // Exactly how a real scan of the reference application reported an API inventory of
+    // `None`: it called `data-search.apigw.example.com/v1/suggestions/`,
+    // the session ended before the response landed, and the one endpoint in
+    // the log did not reach the report derived from it.
+    const model = build([unanswered(`${ORIGIN}/api/suggestions`)]);
+
+    expect(model.apis).toHaveLength(1);
+    expect(model.apis[0]?.url).toContain("/api/suggestions");
+    expect(model.unanswered).toBe(1);
+  });
+
+  it("carries no status, because none was observed", () => {
+    // The report renders an absent status as "no response". Inventing one
+    // would turn "we do not know" into a finding.
+    const model = build([unanswered(`${ORIGIN}/api/suggestions`)]);
+    expect(model.apis[0]?.statuses).toEqual([]);
+    expect(model.apis[0]?.observations[0]?.status).toBeUndefined();
+  });
+
+  it("does not list a page or an image that failed to load", () => {
+    // A document that never arrived is a page that failed to load, which is
+    // a different fact and not an API.
+    const model = build([
+      unanswered(`${ORIGIN}/about`, "Document"),
+      unanswered(`${ORIGIN}/hero.png`, "Image"),
+    ]);
+    expect(model.apis).toEqual([]);
+    expect(model.unanswered).toBe(2);
+  });
+
+  it("does not list a request whose resource type was never recorded", () => {
+    // Found by probe: removing the resource-type guard broke nothing here,
+    // because `Document` and `Image` are already excluded by their role.
+    // What the guard actually protects is the case with no resource type at
+    // all — which falls through every role rule to `application_api`, and
+    // would admit any unanswered first-party request as an endpoint.
+    const model = build([unanswered(`${ORIGIN}/api/suggestions`, "")]);
+    expect(model.apis).toEqual([]);
+  });
+
+  it("does not list a request the browser abandoned", () => {
+    // The distinction the §18.1 control fixture forced. `fetch(beacon)`
+    // with nothing awaiting it is cancelled the moment the page navigates —
+    // which is what an analytics beacon *is* — and in a model keyed on
+    // responses it looks exactly like a call the budget cut off. Admitting
+    // both put `/vendor/collect` in the attack surface.
+    //
+    // The log already tells them apart: one has a `network_failed` event
+    // and the other has nothing after the request.
+    const requestId = "r-cancelled";
+    const model = build([
+      event("network_request", {
+        requestId,
+        url: `${ORIGIN}/vendor/collect`,
+        method: "GET",
+        resourceType: "Fetch",
+        initiator: { type: "script", stack: [`f@${ORIGIN}/app.js:1:1`] },
+      }),
+      event("network_failed", {
+        requestId,
+        url: `${ORIGIN}/vendor/collect`,
+        errorText: "net::ERR_ABORTED",
+        canceled: true,
+      }),
+    ]);
+
+    expect(model.apis).toEqual([]);
+    // Counted, though. §45: it still happened.
+    expect(model.unanswered).toBe(1);
+  });
+
+  it("does not list a third-party host that simply did not answer", () => {
+    // With no response there is no content type, so the payload rules
+    // cannot run. Admitting third-party requests here would be guessing,
+    // and "a vendor did not reply" is not a finding about this target.
+    const model = build([unanswered("https://api.vendor.example/v1/segment")]);
+    expect(model.apis).toEqual([]);
+  });
+
+  it("does not duplicate an endpoint that was answered elsewhere", () => {
+    // One call answered, a second still in flight. Two buckets would read
+    // as two endpoints.
+    const model = build([...call(`${ORIGIN}/api/cart`), unanswered(`${ORIGIN}/api/cart`)]);
+    expect(model.apis).toHaveLength(1);
+    expect(model.apis[0]?.statuses).toEqual([200]);
   });
 });
 
@@ -430,5 +571,42 @@ describe("§17A.2's repeat signal reaches the classifier", () => {
 
     expect(model.apis).toEqual([]);
     expect(model.excluded).toContainEqual({ role: "polling_heartbeat", count: 4 });
+  });
+});
+
+describe("an endpoint classifies the same way whether or not it was answered", () => {
+  it("does not promote a heartbeat because its last response never landed", () => {
+    // Found by the M3 gate on the fixture built to be noisy. A beacon fired
+    // on every page load is `polling_heartbeat` while its responses arrive;
+    // the one still in flight when the scan ended came back
+    // `application_api` and reached the attack surface. One endpoint, two
+    // verdicts, decided by a race with the budget.
+    //
+    // §17A.2's repeat statistics are measured over the whole log, so they
+    // are as available for an unanswered request as for an answered one.
+    const beacon = `${ORIGIN}/vendor/collect`;
+    const events = [
+      ...call(beacon, { mimeType: "" }),
+      ...call(beacon, { mimeType: "" }),
+      ...call(beacon, { mimeType: "" }),
+      // A fourth call, still in flight.
+      event("network_request", {
+        requestId: `r${sequence + 1}`,
+        url: beacon,
+        method: "GET",
+        resourceType: "Fetch",
+        initiator: { type: "script", stack: [`f@${ORIGIN}/app.js:1:1`] },
+      }),
+    ];
+
+    // Spread the three answered calls over a stable interval, as a timer
+    // would: §17A.2 needs a period before it will call anything a heartbeat.
+    const spaced = events.map((envelope, index) => ({
+      ...envelope,
+      timestamp: new Date(Date.parse(envelope.timestamp) + index * 2_000).toISOString(),
+    }));
+
+    const model = buildApiModel(spaced, { firstPartyOrigins: [ORIGIN] });
+    expect(model.apis.map((entry) => entry.url)).not.toContain(`${ORIGIN}/vendor/collect`);
   });
 });

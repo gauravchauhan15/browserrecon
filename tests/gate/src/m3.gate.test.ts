@@ -143,9 +143,9 @@ async function scanAndAssemble(
 /**
  * One section of the report, found by name rather than by number.
  *
- * The numbers move: inserting "WebMCP tools" at position four renumbered
- * five headings, and a test pinned to `## 5. JavaScript` then reads the
- * wrong section and passes anyway, which is worse than failing.
+ * The numbers move: inserting a section at position four renumbered five
+ * headings, and a test pinned to `## 5. JavaScript` then reads the wrong
+ * section and passes anyway, which is worse than failing.
  */
 function section(report: string, name: string): string {
   const heading = new RegExp(`^## \\d+\\. ${name}\\s*$`, "m");
@@ -678,7 +678,19 @@ describe("V3: a scan can sign in, and says which identity it used", () => {
         );
         const report = readFileSync(join(sessionDir, "report.md"), "utf8");
         expect(report).toContain("| Auth state | anonymous |");
-        expect(section(report, "Access barriers")).toContain("authentication");
+        // The barrier table is gone; §7.3's promise is not. A barrier is
+        // named in the coverage summary's limits line, with the statement
+        // that it was recorded rather than circumvented.
+        const summary = section(report, "Coverage summary");
+        expect(summary).toContain("access barrier(s)");
+        expect(summary).toMatch(/not circumvented/i);
+        // The login failure itself, in the file that holds the detail.
+        const derived = JSON.parse(
+          readFileSync(join(sessionDir, "attack-surface.json"), "utf8"),
+        ) as { barriers?: { category: string }[] };
+        expect((derived.barriers ?? []).some((b) => b.category === "authentication")).toBe(
+          true,
+        );
       } finally {
         await fixture.close();
       }
@@ -936,10 +948,14 @@ describe("V3: the artifacts say what the model says", () => {
           );
         }
 
-        // The JavaScript the report lists in section 5 is the JavaScript
-        // coverage counted, rather than two independent readings of one log.
-        const scripts = section(report, "JavaScript").match(/^\| `/gm);
-        expect(scripts?.length).toBe(
+        // The per-script table moved out of the report and into
+        // `attack-surface.json`, which is where a machine was always meant
+        // to read it. The guarantee it carried stands: the inventory and
+        // the coverage count are one reading of one log, not two.
+        const derived = JSON.parse(
+          readFileSync(join(sessionDir, "attack-surface.json"), "utf8"),
+        ) as { javascript?: unknown[] };
+        expect(derived.javascript?.length).toBe(
           model.coverage.dimensions.find((d) => d.dimension === "js_asset")?.total,
         );
       } finally {
@@ -979,18 +995,19 @@ describe("V3: the artifacts say what the model says", () => {
         const { sessionDir } = await scanAndAssemble(fixture, ["--max-pages", "8"]);
         const report = readFileSync(join(sessionDir, "report.md"), "utf8");
 
-        // Named relative to the session directory the report sits in, so
-        // they are readable — and they have to resolve there.
-        const files = section(report, "Artifacts");
-        const paths = [...files.matchAll(/^\| `([^`/][^`]*)` \|/gm)].map((match) => match[1]);
-        expect(paths.length).toBeGreaterThanOrEqual(3);
-        for (const path of paths) {
-          expect(
-            existsSync(join(sessionDir, path as string)),
-            `${path} does not exist in the session directory`,
-          ).toBe(true);
+        // The artifact index is no longer a report section — a reader has
+        // the directory open, and the list was four rows of filenames. What
+        // it was guarding still holds: the files it indexed are written, and
+        // the report still says the directory is unredacted. That warning is
+        // the one thing in the report that is not a finding, and it stays
+        // whatever else is cut.
+        for (const name of ["attack-surface.json", "surface.json", "report.md"]) {
+          expect(existsSync(join(sessionDir, name)), `${name} is missing`).toBe(true);
         }
-        expect(paths.some((path) => /^events-\d+\.jsonl$/.test(path as string))).toBe(true);
+        expect(
+          readdirSync(sessionDir).some((name) => /^events-\d+\.jsonl$/.test(name)),
+          "no event segment was written",
+        ).toBe(true);
         expect(report).toContain(`${sessionDir} contains UNREDACTED`);
       } finally {
         await fixture.close();
@@ -1011,7 +1028,7 @@ describe("V3: the artifacts say what the model says", () => {
       try {
         const { sessionDir } = await scanAndAssemble(fixture, ["--max-pages", "4"]);
         const report = readFileSync(join(sessionDir, "report.md"), "utf8");
-        const tools = section(report, "WebMCP tools");
+        const tools = section(report, "Agentic tools");
 
         for (const tool of WEBMCP_TOOLS) {
           expect(tools, `${tool.name} is missing from the report`).toContain(tool.name);
@@ -1080,7 +1097,7 @@ describe("V3: the artifacts say what the model says", () => {
         ).toBeUndefined();
 
         const report = readFileSync(join(sessionDir, "report.md"), "utf8");
-        const tools = section(report, "WebMCP tools");
+        const tools = section(report, "Agentic tools");
         expect(tools).toMatch(/\*\*destructive\*\*/);
         expect(tools).toContain("unstated");
         expect(tools).toMatch(/never invoked/i);

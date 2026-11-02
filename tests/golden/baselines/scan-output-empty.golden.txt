@@ -66,6 +66,8 @@
 
 _Ratio is of what this scan discovered, never of what the application has._
 
+**Limits on this scan:** 1 coverage gap(s) across 1 reason(s) — `auth_required`; 1 access barrier(s) recorded and not circumvented. Detail in `attack-surface.json`.
+
 ## 2. Workflows
 
 _No workflows were detected._
@@ -74,38 +76,16 @@ _No workflows were detected._
 
 _None._
 
-## 4. WebMCP tools
+_No JavaScript was parsed, so no static endpoint candidates were produced._
 
-_None._
+## 4. Agentic tools
+
+_This page published no tools to visiting agents._
 
 ## 5. Origins
 
 | Origin | Requests | Classification |
 | --- | --- | --- |
 | `https://locked.example.com` | 2 | first_party |
-
-## 6. JavaScript
-
-_None._
-
-## 7. Access barriers
-
-| Category | URL | Evidence |
-| --- | --- | --- |
-| auth_wall | `https://locked.example.com/` | evt_000002 |
-
-_No barrier was bypassed. Barriers are recorded, never circumvented._
-
-## 8. Coverage gaps
-
-| Reason | Count | Remedy |
-| --- | --- | --- |
-| auth_required | 1 | Configure an auth profile and re-run. |
-
-## 9. Artifacts
-
-| File | Contents | Records |
-| --- | --- | --- |
-| `.output/sess_0002/events.jsonl` | raw observations | 9 |
 
 > .output/ contains UNREDACTED captured data — cookies, tokens, authorization headers and request bodies. Do not commit it, attach it to a ticket, or sync it to cloud storage.

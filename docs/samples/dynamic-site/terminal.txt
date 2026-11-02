@@ -10,7 +10,7 @@
   Observed
     Pages visited           7 of 7 discovered
     Workflows               1
-    APIs                    3 observed, 0 discovered but not reached
+    APIs                    3 observed, 2 discovered but not reached
     Origins                 1
     JS assets               2
 

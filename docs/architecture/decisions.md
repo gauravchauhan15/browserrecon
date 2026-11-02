@@ -332,3 +332,233 @@ The general lesson, and the reason this sits beside the three-flakes note: a
 test built on an assumption confirms the assumption. The spike measurements
 and this fixture failed the same way — both looked like evidence and were
 really a record of what someone expected.
+
+### Three ways to lose an endpoint you already recorded (§10A, §17A, §45)
+
+A scan of the reference application with `--max-pages 1` produced a report whose API
+inventory read **None**, beside a coverage score of 0.95 and 115 JavaScript
+assets all marked captured. The log held the endpoints. Three independent
+mechanisms were discarding them, and each looked locally reasonable.
+
+**An origin is not a site.** `classifyTraffic` matched first-party by exact
+origin, so `data-search.apigw.example.com` — the application's own search
+gateway — was classified as somebody else's property and dropped. Almost no
+real application serves its pages and its APIs from the same origin. There is
+now a same-site rule on the registrable domain, recorded in the verdict's
+signal so the weaker basis is visible, and a `third_party_api` role so an
+endpoint on a genuinely foreign host is reported rather than filed as
+`unknown`. The role is deliberately not `application_api`: §17A.3's consumer
+table keeps it out of workflow detection, API sequencing and the coverage
+denominator, which is what makes it safe to report.
+
+**A bucket keyed on the wrong half of the exchange.** The API model only ever
+opened a bucket on a _response_. A request still in flight when the budget
+ended was counted in `unanswered` and listed nowhere — so the one first-party
+API call in that scan was invisible. The request is the evidence that the
+application calls an endpoint; the response only adds a status and a shape.
+Unanswered requests are now listed, narrowly: `fetch`/XHR only, first-party or
+same-site only, because without a content type the payload rules cannot run
+and anything wider would be guessing. The status column says `no response`.
+
+The §18.1 control fixture then rejected the first version of that, and was
+right to. `fetch(beacon)` with nothing awaiting it is cancelled the moment the
+page navigates — which is what an analytics beacon _is_ — and in a model keyed
+on responses that is indistinguishable from a call the budget cut off. The
+first version admitted both and put `/vendor/collect` in the attack surface.
+
+The log already tells them apart and the model was not reading it: a cancelled
+request has a `network_failed` event, and a request the scan outlived has
+nothing after it. `network_failed` now clears the pending entry, so only the
+second kind is listed; both are still counted. The real log that prompted all
+of this shows the same shape — its three `network_failed` events are all
+`canceled: true` analytics beacons, and the API gateway call that went missing
+has no failure event at all.
+
+A related version of the same mistake was caught in between: the first
+unanswered pass classified without §17A.2's repeat statistics, so an endpoint's
+verdict depended on whether its last response won a race with the budget. The
+statistics are measured over the whole log and are as available to an
+unanswered request as to an answered one.
+
+**A correct rule applied one step too far.** `literalOf` returns `undefined`
+for a template literal containing `${`, on the grounds that an interpolation
+is an expression and not a value. True — and it was also being used for
+_candidate_ extraction, where the shape is the whole point and §10A.3 already
+calls everything a candidate. Minification is what made this total rather than
+partial: the call-site rules need a callee that reads like a request, and a
+bundler renames the wrapper to `r`, so the bare literal is the only signal
+left. 110 minified bundles yielded zero candidates. They now yield
+`/api/v2/orders/{id}`, with a guard that a path of nothing but placeholders —
+`/{slugLanguage}/{slug}`, how a site writes every content URL — is a route and
+not an endpoint, unless it sat in a request position where the position is the
+evidence.
+
+Three different components, one shape of error: a rule that is right about the
+question it was written for, applied to a question nobody re-asked. None of
+them had a failing test, because every test was written from the same
+assumption as the code. What caught all three was pointing the tool at an
+application nobody on this project had modelled.
+
+**And the whole static pass was never wired in.** `javascript-discovery` had
+an analyzer, a triage ranking, a bounded pipeline and a static↔runtime
+reconciler, each with tests, since M2. Nothing outside the package imported
+any of it. The report's `static_api_candidate` column was filled from the
+_queue's_ skip list — a number that had nothing to do with JavaScript — which
+is why the gap was invisible: the column was populated, so it looked wired.
+
+### The largest responses were invisible to everything (§22.2)
+
+A user searched one of the scanned bundles by hand and found thirteen endpoint
+paths the tool had not reported — including the array an Angular HTTP
+interceptor matches against, which is as close to a declared endpoint list as
+a minified bundle gets.
+
+The detection rules were not the first problem. §22.2 externalizes an
+oversized payload to a content-addressed file, and it moves the **whole**
+payload, not just its body. So eight events — the eight largest responses of
+the scan, `the main entry bundle` among them — reached every consumer as
+`{$external, hash, bytes}`: no url, no mime type, no body. The static pass
+read 113 small chunks and none of the files the application actually lives in,
+and the API model never saw those responses either.
+
+Nothing failed. A consumer reading `payload.body?.text` on a reference gets
+`undefined`, which is indistinguishable from a response whose body was not
+captured — a case that is normal and already handled. The growth-control
+mechanism deleted the most interesting events from the analysis and every
+layer treated the result as ordinary.
+
+`readEvents` now takes `resolveExternal`, off by default so the streaming
+reader keeps its memory bound, and on wherever payloads are analysed. A
+missing body file leaves the reference in place and reports a problem rather
+than ending the read.
+
+With the bundles actually being read, two detection rules followed:
+
+- **An API marker need not be the first segment.** `/search-api/v2/plan/` is a
+  real endpoint, and anchoring the marker to the start of the path classified
+  it as a page. The marker is matched as a delimited word, not a substring,
+  because a bare test puts `/capital/` in the API inventory.
+- **An array of paths where one is plainly an API is an endpoint table.** Most
+  entries in a real table carry no marker — `/category/skeleton/`,
+  `/you-may-also-like/`, `/onboarding/answers/` — and read one string at a
+  time they are pages. Read as a list they are one table, and the array is as
+  structural a signal as a call site. Narrow on purpose: two paths minimum, at
+  least one an API on its own evidence, `low` confidence and a basis naming
+  the array, because the evidence is the company a string keeps.
+
+Twenty-five candidates where there had been none, thirteen of them the ones
+read off the screen by hand.
+
+### An endpoint is a path and a base, and the base is written separately
+
+A second pass over the same bundle, prompted by a user reading it by hand,
+found the form the application actually uses for nearly every call it makes:
+
+    let x = `${this.r.getApiBaseUrl(`4.1`)}loyalty/status/`
+
+and, for the interceptor's match lists, the same idea one statement apart:
+
+    const o = [`login/email/otp/`, `orders/.+/`];
+    return o.map(p => new RegExp(getApiBaseUrl(`4.2`) + p));
+
+Nothing in the analyzer could see either. `PATH_SHAPED` requires a leading
+slash, and these paths have none — the base supplies it. That requirement is
+not wrong: without a base in view, "a string containing a slash" is
+`text/html`, `utf-8`, every MIME type and half the minified noise in a
+bundle. What was missing is the thing that makes a relative path legible,
+which is the base it is concatenated with.
+
+Three rules, each resting on the base being visible:
+
+- **A template that begins with the base.** The author has said, in the
+  string, that what follows hangs off the API base. Nothing is inferred and
+  no variable followed, so this is `medium` rather than `low`. A template
+  that merely _contains_ a base is not this: `/assets/${base}/x` is a path
+  with something interpolated into it, and reordering the two would build a
+  URL the code never builds.
+- **An array linked to the base it is mapped over.** The array and the
+  `getApiBaseUrl` call are two statements apart, so the link is made by name
+  — find `<name>.map(` inside the enclosing function and read the base out of
+  the callback. Local to one function and one variable: anything wider is a
+  dataflow engine, anything narrower misses the only form this appears in.
+- **A regex matcher reduced to the path it matches.**
+  `orders/[0-9]+/tax-documents/` names an endpoint as precisely as a template
+  literal does, and `templatePath` already had the vocabulary for it. A
+  lookahead is an exclusion rather than a segment — reducing
+  `payment(?!/payment-gateways-per-method)` to a hole invented
+  `payment{param}` — and anything that will not reduce cleanly is skipped
+  rather than half-reduced.
+
+The version argument is kept and the origin is not. `getApiBaseUrl("4.2")`
+says the endpoints under it are `/4.2/...`; what host that resolves to is a
+runtime value, and §10A.5 forbids inventing it. A fabricated origin in an
+endpoint inventory is the worst possible kind of wrong: it sends someone
+looking for a URL that never existed.
+
+25 candidates became 117, across five API versions and three base getters.
+
+One guard here is belt and braces and is documented as such: the bail-out
+when a regex will not fully reduce is unreachable for every pattern short of
+`/orders/(a)$x/`, because the path-shape tests downstream reject the same
+characters. It states the intent where the reduction gives up rather than
+leaving that to a regex three functions away — but a probe that removes it
+changes no behaviour, and saying so is better than implying it is load-bearing.
+
+## A page that is not finished is not a page that is empty
+
+Pointed at the reference application, the scan reported zero pages visited, no DOM, no
+forms and — under "Agentic tools" — _"this page published no tools to
+visiting agents."_ The site publishes five. Three separate decisions had to
+line up for that sentence to be printed, and each was reasonable on its own.
+
+**The navigation was discarded.** `page.goto(…, { waitUntil:
+"domcontentloaded" })` threw at the 15s action budget. The document had
+committed, 126 requests and 23 bundles were already in the log, and the page
+was sitting in the browser — but a throw is a throw, so the runner recorded
+the URL as failed and never harvested it. A navigation that runs out of time
+with a document committed is a **slow page, not a failed one**; it is kept
+and flagged `loadTimedOut`. The guard that keeps this honest is that the
+browser's URL must have _changed during this attempt_: a navigation that
+times out before committing leaves the previous page in the tab, and
+accepting that would file one page's links, forms and tools under another's.
+
+**The registry was read too early.** A tool registry is published by script,
+and the scripts that publish one run late. Measured on the reference application, headless and
+cold, from the start of navigation:
+
+| time  | state                                                   |
+| ----- | ------------------------------------------------------- |
+| 15.3s | `navigator.modelContext` exists, holding **zero** tools |
+| 23.2s | two tools                                               |
+| 26.0s | all five                                                |
+
+Two things follow. Registration is a trickle with gaps — 7.9s from the
+registry appearing to its first tool — so "the count held still briefly"
+means nothing: a 500ms stability window harvested two of the five. And a
+registry's _existence_ says nothing about its contents; at 15.3s it was
+there and empty, which is the state most likely to be read as "no tools" by
+anything that checks once. So the harvest waits in the page for the count to
+go **idle** rather than to pause, with separate budgets for "no registry"
+and "no registry yet" — the same observation, distinguishable only by
+waiting, and only one of them worth paying 15s for.
+
+**The report asserted what it had not observed.** A registry never appears
+in traffic, so the only evidence that a page publishes no tools is a page
+that was read and found to publish none. With the browsing phase failed
+outright there was no such evidence, and the section said it anyway. It now
+needs `pagesRead > 0` to make the claim. The same rule one step along: a
+tool list cut off by the budget reads exactly like a complete one, so the
+harvest reports `webmcpStillFilling` and the runner says so.
+
+The common thread is the one this file keeps recording: a rule that was
+right about the question it was written for, applied to a question nobody
+re-asked. "Timed out" meant "failed" because every page measured until then
+was a fixture that loaded in milliseconds. "Read the registry" meant "read
+it now" because every fixture registered its tools in the first tick — which
+is also why no test could tell a harvest that waits from one that does not,
+and why the fixture now registers late, in two batches, with a gap.
+
+One process note, because it cost a false negative. The probe for the idle
+window _passed_ the first time it was run — the fixture package resolves to
+its build output, and the edit that made the fixture adversarial had not
+been built. A probe run against a stale `dist` proves nothing. Build first.

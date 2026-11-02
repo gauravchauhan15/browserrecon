@@ -126,6 +126,8 @@
 
 _Ratio is of what this scan discovered, never of what the application has._
 
+**Limits on this scan:** 23 coverage gap(s) across 2 reason(s) — `auth_required`, `excluded_by_policy`; 1 access barrier(s) recorded and not circumvented. Detail in `attack-surface.json`.
+
 ## 2. Workflows
 
 **Add to cart** (`wf_0001`, confidence 0.86)
@@ -148,17 +150,32 @@ _Ratio is of what this scan discovered, never of what the application has._
 
 ## 3. API inventory
 
-| Method | URL | Status | Role |
-| --- | --- | --- | --- |
-| GET | `https://shop.example.com/api/products` | 200 | consumer |
-| POST | `https://shop.example.com/api/cart` | 201 | consumer |
-| GET | `https://shop.example.com/api/session` | 401 | auth |
+| Method | URL | Status | Content type | Party | Role |
+| --- | --- | --- | --- | --- | --- |
+| GET | `https://shop.example.com/api/products` | 200 | — | — | consumer |
+| POST | `https://shop.example.com/api/cart` | 201 | — | — | consumer |
+| GET | `https://shop.example.com/api/session` | 401 | — | — | auth |
 
-## 4. WebMCP tools
+_No JavaScript was parsed, so no static endpoint candidates were produced._
 
-| Tool | Effect | Endpoint | Description |
-| --- | --- | --- | --- |
-| `searchProducts` | unstated | `/api/products/search` | Search the catalog by keyword. |
+## 4. Agentic tools
+
+**1 tool(s)** — unstated 1
+
+```mermaid
+graph LR
+  root["https://shop.example.com"]
+  p0["/ (1)"]
+  root --> p0
+  t0["searchProducts"]
+  p0 --> t0
+  class t0 unstated
+  classDef unstated fill:#eaecee,stroke:#707b7c,stroke-width:2px,color:#1a1a1a
+```
+
+| Tool | Effect | Page | Endpoint | Description |
+| --- | --- | --- | --- | --- |
+| `searchProducts` | unstated | — | `/api/products/search` | Search the catalog by keyword. |
 
 _Tools are reported, never invoked (§7.2)._
 
@@ -168,34 +185,5 @@ _Tools are reported, never invoked (§7.2)._
 | --- | --- | --- |
 | `https://shop.example.com` | 84 | first_party |
 | `https://cdn.example.net` | 12 | third_party_cdn |
-
-## 6. JavaScript
-
-| Script | Size | Party | Analysis |
-| --- | --- | --- | --- |
-| `https://shop.example.com/app.js` | 47 KB | first | 3 endpoints |
-| `(inline)` | — | first | inline bootstrap |
-
-## 7. Access barriers
-
-| Category | URL | Evidence |
-| --- | --- | --- |
-| auth_wall | `https://shop.example.com/account` | evt_000103 |
-
-_No barrier was bypassed. Barriers are recorded, never circumvented._
-
-## 8. Coverage gaps
-
-| Reason | Count | Remedy |
-| --- | --- | --- |
-| auth_required | 14 | Configure an auth profile and re-run. |
-| excluded_by_policy | 9 | Widen --allowed-paths if intended. |
-
-## 9. Artifacts
-
-| File | Contents | Records |
-| --- | --- | --- |
-| `.output/sess_0001/events.jsonl` | raw observations | 1420 |
-| `.output/sess_0001/attack-surface.json` | derived model | — |
 
 > .output/ contains UNREDACTED captured data — cookies, tokens, authorization headers and request bodies. Do not commit it, attach it to a ticket, or sync it to cloud storage.

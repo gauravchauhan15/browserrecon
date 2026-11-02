@@ -296,8 +296,23 @@ describe("V1 is done when: a barrier is recorded, never circumvented", () => {
         // And the non-browser one says who it is rather than impersonating.
         for (const agent of toolAgents) expect(agent).toContain("browserrecon");
 
+        // §7.3's promise, asserted against a barrier this scan actually met
+        // rather than against a standing sentence.
+        //
+        // The standing sentence is what this used to check, and it passed
+        // for a reason that had nothing to do with the fixture: the report's
+        // barrier list was fed from a failed login and nothing else, so a
+        // scan that met a 429 and a WAF-shaped 403 recorded no barrier at
+        // all and printed "no barrier was bypassed" underneath. True, and
+        // about nothing.
         const report = readFileSync(join(result.sessionDir, "report.md"), "utf8");
-        expect(report).toMatch(/never circumvented/i);
+        expect(report).toMatch(/access barrier\(s\) recorded and not circumvented/i);
+
+        const derived = JSON.parse(
+          readFileSync(join(result.sessionDir, "attack-surface.json"), "utf8"),
+        ) as { barriers?: { category: string }[] };
+        const categories = new Set((derived.barriers ?? []).map((b) => b.category));
+        expect([...categories].sort()).toContain("rate_limit");
       } finally {
         await fixture.close();
       }

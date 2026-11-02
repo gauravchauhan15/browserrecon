@@ -22,7 +22,7 @@ import { createReadStream, existsSync, readdirSync, readFileSync } from "node:fs
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { validateEnvelope, type EventEnvelope } from "@browserrecon/events";
-import { isExternalBodyRef, type ExternalBodyRef } from "./bodies.js";
+import { BodyStore, isExternalBodyRef, type ExternalBodyRef } from "./bodies.js";
 import { sessionPaths } from "./layout.js";
 import type { Manifest } from "./store.js";
 
@@ -45,6 +45,21 @@ export interface ReadOptions {
   readonly onProblem?: ((problem: ReadProblem) => void) | undefined;
   /** Skip events at or below this sequence. Used by `resume` (§30). */
   readonly afterSequence?: number | undefined;
+  /**
+   * Read externalized payloads back from the body store (§22.2).
+   *
+   * Off by default, because the streaming reader exists so memory is a
+   * function of the longest line rather than of the log, and resolving every
+   * reference gives that up.
+   *
+   * On for anything that analyses payloads. §22.2 externalizes the *whole*
+   * payload, not just its body — so an event over the threshold reaches a
+   * consumer with no url, no mime type and no body, and silently contributes
+   * nothing. A scan of the reference application externalized its eight largest responses,
+   * `the main entry bundle` among them, and the static pass read the 113 small
+   * chunks and none of the bundles the application actually lives in.
+   */
+  readonly resolveExternal?: boolean | undefined;
 }
 
 /** Read the segment manifest, if one exists. */
@@ -80,6 +95,7 @@ export async function* readEvents(
       : discoverSegments(dir);
 
   const after = options.afterSequence ?? 0;
+  const bodies = options.resolveExternal === true ? new BodyStore(paths.bodies) : undefined;
 
   for (const filename of segments) {
     const path = join(paths.dir, filename);
@@ -121,6 +137,25 @@ export async function* readEvents(
         }
 
         if (validation.envelope.sequence <= after) continue;
+
+        if (bodies !== undefined && isExternalBodyRef(validation.envelope.payload)) {
+          // A missing or unreadable body file must not end the read. The
+          // reference stays in place, which is what a consumer already has to
+          // tolerate, rather than losing every event after it.
+          try {
+            const payload = await bodies.get(validation.envelope.payload);
+            yield { ...validation.envelope, payload };
+            continue;
+          } catch (error) {
+            options.onProblem?.({
+              segment: filename,
+              line: lineNumber,
+              kind: "malformed_json",
+              detail: `externalized payload ${validation.envelope.payload.hash} could not be read: ${String(error)}`,
+            });
+          }
+        }
+
         yield validation.envelope;
       }
     } finally {

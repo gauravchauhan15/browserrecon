@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@browserrecon/api-model": "workspace:*",
+    "@browserrecon/collector-javascript-discovery": "workspace:*",
     "@browserrecon/core": "workspace:*",
     "@browserrecon/correlation": "workspace:*",
     "@browserrecon/coverage": "workspace:*",

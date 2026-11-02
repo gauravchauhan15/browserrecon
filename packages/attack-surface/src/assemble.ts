@@ -48,7 +48,16 @@ import {
   type CoverageScore,
   type GapInput,
 } from "@browserrecon/coverage";
-import { buildDependencyGraph, type DependencyGraph } from "@browserrecon/correlation";
+import {
+  buildDependencyGraph,
+  passesFilter,
+  type DependencyGraph,
+} from "@browserrecon/correlation";
+import {
+  reconcile,
+  type ReconcileResult,
+  type StaticCandidate,
+} from "@browserrecon/collector-javascript-discovery/reconcile";
 import { buildAttackSurface, type AttackSurface, type SurfaceItem } from "./surface.js";
 
 export interface AssembleInput {
@@ -58,6 +67,22 @@ export interface AssembleInput {
   readonly firstPartyOrigins?: readonly string[] | undefined;
   /** Candidates found but never reached, for the gap queue. */
   readonly unreached?: readonly GapInput[] | undefined;
+  /**
+   * Endpoints a JavaScript parser found in the bundles this scan captured.
+   *
+   * Injected rather than derived, because the parser is a native addon and
+   * §1.2 requires this assembly to run against a log with nothing installed
+   * but Node. The caller that has a parser passes its findings; a caller
+   * replaying a log without one passes nothing and loses exactly this
+   * dimension, rather than failing to load.
+   *
+   * §10A.3 governs what happens to them: a candidate is not an endpoint
+   * until the runtime says so, so these are reconciled against what was
+   * actually called rather than appended to the inventory.
+   */
+  readonly staticCandidates?: readonly StaticCandidate[] | undefined;
+  /** Base paths from configuration, so `/orders` can meet `/api/v2/orders`. */
+  readonly staticBasePaths?: readonly string[] | undefined;
 }
 
 export interface AssembledModel {
@@ -72,6 +97,16 @@ export interface AssembledModel {
   readonly gaps: readonly CoverageGap[];
   /** §21: what the page publishes to agents. Invisible to traffic analysis. */
   readonly webmcp: readonly WebMcpToolFound[];
+  /**
+   * Static candidates, each settled against the runtime (§10A.3, §10.3).
+   *
+   * `undefined` when no parser ran. That is not the same as "found nothing",
+   * and the report renders the two differently — one says the bundles were
+   * read, the other says they were not.
+   */
+  readonly staticApis?: ReconcileResult | undefined;
+  /** §7.3: what stopped the scan, recorded and never circumvented. */
+  readonly barriers: readonly AccessBarrier[];
   readonly surface: AttackSurface;
 }
 
@@ -91,6 +126,15 @@ export interface WebMcpToolFound {
   readonly name: string;
   readonly description?: string | undefined;
   readonly endpoint?: string | undefined;
+  /**
+   * The page the tool was registered on.
+   *
+   * Carried because a registry is per page: an application can publish one
+   * set of tools on its home page and another in checkout, and a flat list
+   * of tool names loses which screen an agent has to be on to call each
+   * one. The event has always had it; the model dropped it.
+   */
+  readonly page?: string | undefined;
   /**
    * The tool's declared input schema.
    *
@@ -163,6 +207,7 @@ function webMcpTools(events: readonly EventEnvelope[]): readonly WebMcpToolFound
       name,
       ...(payload.description === undefined ? {} : { description: payload.description }),
       ...(payload.endpoint === undefined ? {} : { endpoint: payload.endpoint }),
+      ...(payload.url === undefined ? {} : { page: payload.url }),
       ...(payload.inputSchema === undefined ? {} : { inputSchema: payload.inputSchema }),
       ...(payload.outputSchema === undefined ? {} : { outputSchema: payload.outputSchema }),
       ...(payload.annotations === undefined ? {} : { annotations: payload.annotations }),
@@ -176,6 +221,72 @@ function webMcpTools(events: readonly EventEnvelope[]): readonly WebMcpToolFound
     });
   }
   return found;
+}
+
+/**
+ * A response that stopped the scan getting at something — §7.3, §10C.1.
+ *
+ * `access_barrier` has been a coverage dimension since §10C.1 and was never
+ * populated, and the report's barrier table was fed from one source: a
+ * failed login. So a scan that met a 403 on every admin route and a 429 from
+ * the rate limiter reported no barriers at all, under a standing sentence
+ * saying none had been circumvented — true, and about nothing.
+ *
+ * §7.3 is why this matters more than a missing count. The promise is that a
+ * barrier is recorded rather than defeated, and a promise about a list that
+ * is always empty cannot be checked.
+ */
+export interface AccessBarrier {
+  readonly category: "authentication" | "authorization" | "rate_limit" | "challenge";
+  readonly url: string;
+  /** The status and the event it came from, so a reader can go and look. */
+  readonly evidence: string;
+  readonly eventId: string;
+}
+
+/** What a status code means for access, where it means anything. */
+const BARRIER_STATUS: Readonly<Record<number, AccessBarrier["category"]>> = {
+  401: "authentication",
+  403: "authorization",
+  407: "authentication",
+  429: "rate_limit",
+  503: "challenge",
+};
+
+/**
+ * Barriers the log records.
+ *
+ * One per URL and category: a rate limiter answers 429 forty times during a
+ * scan and that is one barrier met forty times, not forty findings.
+ *
+ * Nothing here attempts to get past anything, and nothing here suggests how.
+ * §7.3 forbids both, and a remedy field on this object would be the obvious
+ * place for the suggestion to appear.
+ */
+function accessBarriers(events: readonly EventEnvelope[]): readonly AccessBarrier[] {
+  const found = new Map<string, AccessBarrier>();
+
+  for (const envelope of events) {
+    if (envelope.type !== "network_response") continue;
+    const payload = envelope.payload as { url?: string; status?: number };
+    if (payload.url === undefined || payload.status === undefined) continue;
+    const category = BARRIER_STATUS[payload.status];
+    if (category === undefined) continue;
+
+    const url = payload.url.split("?")[0] ?? payload.url;
+    const key = `${category} ${url}`;
+    if (found.has(key)) continue;
+    found.set(key, {
+      category,
+      url,
+      evidence: `HTTP ${payload.status}`,
+      eventId: envelope.event_id,
+    });
+  }
+
+  return [...found.values()].sort(
+    (a, b) => a.url.localeCompare(b.url) || a.category.localeCompare(b.category),
+  );
 }
 
 interface ScriptAsset {
@@ -274,9 +385,25 @@ export function assemble(input: AssembleInput): AssembledModel {
       : { firstPartyOrigins: input.firstPartyOrigins }),
   });
 
-  const sequences = buildSequences(api);
+  /**
+   * The application's own endpoints, for everything that reasons about flow.
+   *
+   * The model now keeps three roles so the inventory can report them (§17A.3
+   * `api_inventory`), and two of those must not reach here. A workflow whose
+   * second step is a call to a vendor's segmentation API is not a workflow a
+   * reader can do anything with, and counting third-party endpoints in the
+   * coverage denominator makes a tracker-heavy page look under-explored.
+   *
+   * One filter, applied once, named after the consumer it serves — rather
+   * than each stage downstream re-deciding and disagreeing.
+   */
+  const applicationApis = api.apis.filter((entry) =>
+    passesFilter(entry.role, "workflow_detection"),
+  );
 
-  const apiEvents = api.apis.flatMap((entry) =>
+  const sequences = buildSequences({ ...api, apis: applicationApis });
+
+  const apiEvents = applicationApis.flatMap((entry) =>
     entry.observations.map((observation) => ({
       sequence: observation.sequence,
       apiId: entry.api_id,
@@ -303,7 +430,7 @@ export function assemble(input: AssembleInput): AssembledModel {
 
   const state = buildStateModel({
     events: input.events,
-    apiEvents: api.apis.flatMap((entry) =>
+    apiEvents: applicationApis.flatMap((entry) =>
       entry.observations.map((observation) => ({
         sequence: observation.sequence,
         apiId: entry.api_id,
@@ -335,7 +462,7 @@ export function assemble(input: AssembleInput): AssembledModel {
   });
 
   const dependencies = buildDependencyGraph(
-    api.apis.map((entry) => ({
+    applicationApis.map((entry) => ({
       api_id: entry.api_id,
       depends_on: entry.depends_on.map((edge) => ({
         from: entry.api_id,
@@ -346,7 +473,29 @@ export function assemble(input: AssembleInput): AssembledModel {
   );
 
   const tools = webMcpTools(input.events);
+  const barriers = accessBarriers(input.events);
   const { scripts, routes } = pageContext(input.events, input.firstPartyOrigins ?? []);
+
+  // §10A.3's line, enforced: what the parser found meets what was called,
+  // and each candidate comes back `observed`, `correlated` or `unobserved`.
+  // The third is the valuable one — surface named in the application's own
+  // code that this scan never reached.
+  const staticApis =
+    input.staticCandidates === undefined
+      ? undefined
+      : reconcile(
+          input.staticCandidates,
+          applicationApis.map((entry) => ({
+            api_id: entry.api_id,
+            method: entry.method,
+            url: entry.url,
+            identity: {
+              origin: entry.identity.origin,
+              pathTemplate: entry.identity.pathTemplate,
+            },
+          })),
+          input.staticBasePaths === undefined ? {} : { basePaths: input.staticBasePaths },
+        );
 
   // The API model groups by endpoint, not by origin, so the origin list is
   // derived here rather than read — one derivation, in the place that needs
@@ -422,7 +571,7 @@ export function assemble(input: AssembleInput): AssembledModel {
   ];
 
   const coverageItems: CoverageItem[] = [
-    ...api.apis.map((entry): CoverageItem => ({
+    ...applicationApis.map((entry): CoverageItem => ({
       dimension: "runtime_api",
       id: entry.api_id,
       status: "observed",
@@ -473,10 +622,29 @@ export function assemble(input: AssembleInput): AssembledModel {
       id: origin,
       status: "observed",
     })),
-    ...(input.unreached ?? []).map((gap, index): CoverageItem => ({
+    ...barriers.map((barrier): CoverageItem => ({
+      dimension: "access_barrier",
+      id: `${barrier.category} ${barrier.url}`,
+      // A barrier met is a barrier observed. It is emphatically not surface
+      // reached — §10C.2's `blocked` is what it is for, and it keeps the
+      // barrier out of the numerator while it stays in the denominator.
+      status: "blocked",
+    })),
+    // What the bundles named, and whether the scan got to it.
+    //
+    // This dimension used to be filled from the *queue's* skip list, which
+    // had nothing to do with JavaScript: a scan that parsed 110 first-party
+    // bundles reported one static API candidate, and that one candidate was
+    // a page the budget cut off. It now says what it is named for.
+    ...(staticApis?.endpoints ?? []).map((endpoint): CoverageItem => ({
       dimension: "static_api_candidate",
-      id: `${gap.candidate}#${index}`,
-      status: "unobserved",
+      id: endpoint.path,
+      status:
+        endpoint.status === "observed"
+          ? "observed"
+          : endpoint.status === "correlated"
+            ? "correlated"
+            : "unobserved",
     })),
   ];
 
@@ -493,6 +661,8 @@ export function assemble(input: AssembleInput): AssembledModel {
     score: scoreCoverage({ coverage }),
     gaps: buildGapQueue(input.unreached ?? []),
     webmcp: tools,
+    barriers,
+    ...(staticApis === undefined ? {} : { staticApis }),
     surface: buildAttackSurface({
       sessionId: input.sessionId,
       target: input.target,

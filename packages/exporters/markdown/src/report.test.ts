@@ -21,10 +21,8 @@ function report(overrides: Partial<ReportInput> = {}): ReportInput {
     apis: [],
     webmcpTools: [],
     origins: [],
-    javascript: [],
     barriers: [],
     gaps: [],
-    artifacts: [{ path: ".output/events.jsonl", contents: "raw observations", records: 1420 }],
     ...overrides,
   };
 }
@@ -59,7 +57,7 @@ describe("section order", () => {
   it("numbers the headings so a reader can cite one", () => {
     const markdown = renderReport(report());
     expect(markdown).toContain(`## 1. ${SECTION_ORDER[0]}`);
-    expect(markdown).toContain(`## 7. ${SECTION_ORDER[6]}`);
+    expect(markdown).toContain(`## 5. ${SECTION_ORDER[4]}`);
   });
 
   it("keeps the section order stable when the content changes", () => {
@@ -103,7 +101,7 @@ describe("the tier-gated section", () => {
     // The distinction that makes the omission meaningful: `[]` means we
     // looked. `undefined` means we did not.
     const markdown = renderReport(report({ hypotheses: [] }));
-    expect(markdown).toContain("## 10. Security hypotheses");
+    expect(markdown).toContain("## 6. Security hypotheses");
   });
 
   it("says hypotheses are not findings", () => {
@@ -196,27 +194,42 @@ describe("what the report refuses to claim", () => {
     );
   });
 
-  it("states that no barrier was bypassed, even with no barriers to report", () => {
+  it("states that a barrier was recorded rather than defeated", () => {
     // §7.3. A reader has to be able to tell that barriers were recorded
-    // rather than defeated — and the empty case is where a reader would
-    // otherwise assume the tool simply got through.
-    const markdown = renderReport(report());
-    expect(markdown).toMatch(/never circumvented/i);
+    // rather than circumvented. The barrier *table* is gone — it was empty
+    // on every scan that ever produced one — but the promise is not: it is
+    // printed wherever a barrier exists, which is the case a reader would
+    // otherwise read as "the tool simply got through".
+    const markdown = renderReport(
+      report({
+        barriers: [
+          { category: "authentication", url: "https://shop.example.com", evidence: "401" },
+        ],
+      }),
+    );
+    expect(markdown).toMatch(/not circumvented/i);
+    expect(markdown).toContain("1 access barrier(s)");
   });
 
-  it("renders the gaps section whether or not there are gaps", () => {
-    expect(renderReport(report())).toContain("## 8. Coverage gaps");
-  });
-
-  it("gives every gap a remedy", () => {
-    // §10C.7: a gap with no action is a number a user cannot move.
+  it("names its gaps in the coverage summary, with the file that details them", () => {
+    // §10C.6: the report must never read as a clean bill of health. The gap
+    // table is gone; the count and the reasons are not, and they sit under
+    // the coverage score rather than eight sections below it.
     const markdown = renderReport(
       report({
         gaps: [{ reason: "auth_required", count: 14, remedy: "Configure an auth profile" }],
       }),
     );
-    expect(markdown).toContain("Remedy");
-    expect(markdown).toContain("Configure an auth profile");
+    expect(markdown).toContain("14 coverage gap(s)");
+    expect(markdown).toContain("auth_required");
+    expect(markdown).toContain("attack-surface.json");
+    expect(markdown.indexOf("coverage gap(s)")).toBeLessThan(markdown.indexOf("## 2."));
+  });
+
+  it("says nothing about limits when there are none to report", () => {
+    // The other half: a limits line printed with zeros would be noise, and
+    // noise is what teaches a reader to skip the line that matters.
+    expect(renderReport(report())).not.toContain("Limits on this scan");
   });
 
   it("warns that the artifacts directory is unredacted", () => {
@@ -235,13 +248,6 @@ describe("rendering", () => {
     expect(markdown).not.toContain("Infinity");
   });
 
-  it("labels an inline script rather than showing an empty cell", () => {
-    const markdown = renderReport(
-      report({ javascript: [{ url: "", firstParty: true, analysis: "endpoints: 3" }] }),
-    );
-    expect(markdown).toContain("(inline)");
-  });
-
   it("ends with exactly one trailing newline", () => {
     // Prettier and the golden harness both care, and a drifting trailing
     // newline is a diff on every report for no reason.
@@ -251,40 +257,7 @@ describe("rendering", () => {
   });
 });
 
-describe("sizes", () => {
-  it("shows a size a reader can compare at a glance", () => {
-    // 48213 and 481230 look alike in a column; 47 KB and 470 KB do not.
-    const markdown = renderReport(
-      report({
-        javascript: [
-          {
-            url: "https://shop.example.com/app.js",
-            bytes: 48213,
-            firstParty: true,
-            analysis: "3 endpoints",
-          },
-          {
-            url: "https://shop.example.com/tiny.js",
-            bytes: 412,
-            firstParty: true,
-            analysis: "—",
-          },
-          {
-            url: "https://cdn.example.net/big.js",
-            bytes: 3_500_000,
-            firstParty: false,
-            analysis: "—",
-          },
-        ],
-      }),
-    );
-    expect(markdown).toContain("47 KB");
-    expect(markdown).toContain("412 B");
-    expect(markdown).toContain("3.3 MB");
-  });
-});
-
-describe("WebMCP tools", () => {
+describe("Agentic tools", () => {
   it("lists what the page publishes to agents", () => {
     // §21, §44. A tool registration sends no network traffic, so this
     // section is the only place in the report a reader can learn that the
@@ -314,5 +287,174 @@ describe("WebMCP tools", () => {
     const markdown = renderReport(report());
     expect(markdown).toContain(`## 4. ${SECTION_ORDER[3]}`);
     expect(markdown).not.toContain("never invoked");
+  });
+});
+
+describe("the agentic-tool diagram", () => {
+  const tools = [
+    { name: "search_items", page: "https://shop.example.com/en", effect: "read_only" as const },
+    {
+      name: "toggle_favorite",
+      page: "https://shop.example.com/en",
+      effect: "writes" as const,
+    },
+    {
+      name: "cancel_order",
+      page: "https://shop.example.com/account",
+      effect: "destructive" as const,
+    },
+    { name: "legacy_helper", page: "https://shop.example.com/account" },
+  ];
+
+  it("draws the registry as target → page → tool", () => {
+    // A registry is per page, so the page is the middle rank. A flat list
+    // of names answers "what is published" and not "what does an agent have
+    // to be looking at to call this" — which is the question that decides
+    // whether a destructive tool is one navigation away.
+    const markdown = renderReport(report({ webmcpTools: tools }));
+    expect(markdown).toContain("```mermaid");
+    expect(markdown).toContain("graph LR");
+    expect(markdown).toContain('root["https://shop.example.com"]');
+    expect(markdown).toContain('["/en (2)"]');
+    expect(markdown).toContain('["/account (2)"]');
+    expect(markdown).toContain('["cancel_order"]');
+  });
+
+  it("colours each tool by the effect the page declared", () => {
+    const markdown = renderReport(report({ webmcpTools: tools }));
+    expect(markdown).toContain("classDef destructive");
+    expect(markdown).toContain("classDef writes");
+    expect(markdown).toContain("classDef readonly");
+    // Silence is its own class, never folded into read-only.
+    expect(markdown).toContain("classDef unstated");
+  });
+
+  it("defines only the classes it used", () => {
+    // A legend that lists a colour the picture does not contain is a legend
+    // that disagrees with the picture.
+    const markdown = renderReport(
+      report({ webmcpTools: [{ name: "search", effect: "read_only" }] }),
+    );
+    expect(markdown).toContain("classDef readonly");
+    expect(markdown).not.toContain("classDef destructive");
+  });
+
+  it("counts the tools by effect above the picture", () => {
+    const markdown = renderReport(report({ webmcpTools: tools }));
+    expect(markdown).toContain("**4 tool(s)**");
+    expect(markdown).toContain("destructive 1");
+    expect(markdown).toContain("unstated 1");
+  });
+
+  it("falls back to the target when a tool names no page", () => {
+    // A log written before the page was carried still has to render.
+    const markdown = renderReport(
+      report({ webmcpTools: [{ name: "search", effect: "read_only" }] }),
+    );
+    expect(markdown).toContain("```mermaid");
+    expect(markdown).not.toContain("undefined");
+  });
+
+  it("does not let a tool name break the diagram", () => {
+    // Tool names come from the page. A quote in one would close the label
+    // early and produce a syntax error where a diagram should be.
+    const markdown = renderReport(
+      report({ webmcpTools: [{ name: 'we"ird\nname', effect: "writes" }] }),
+    );
+    const diagram = markdown.slice(markdown.indexOf("```mermaid"));
+    const label = diagram.slice(diagram.indexOf("t0["), diagram.indexOf("t0[") + 40);
+    expect(label).not.toContain('"we"ird');
+    expect(diagram).not.toMatch(/\[\s*"[^"]*"[^\]]*"/);
+  });
+
+  it("says so plainly when the page published nothing", () => {
+    expect(renderReport(report({ pagesRead: 1 }))).toContain("published no tools");
+    expect(renderReport(report({ pagesRead: 1 }))).not.toContain("```mermaid");
+  });
+
+  it("does not claim a page published nothing when no page was read", () => {
+    // A registry never appears in traffic, so the only evidence that a page
+    // publishes no tools is a page that was read. A scan of the reference application
+    // whose browsing phase failed outright printed "this page published no
+    // tools to visiting agents" — about a site publishing five. Reporting
+    // the unobserved as the absent, in the one section where nothing else
+    // in the log could contradict it.
+    const markdown = renderReport(report({ pagesRead: 0 }));
+    expect(markdown).not.toContain("published no tools");
+    expect(markdown).toMatch(/unknown/i);
+  });
+});
+
+describe("endpoints the bundles named", () => {
+  const found = {
+    endpoints: [
+      {
+        path: "/api/v2/orders/{id}",
+        status: "unobserved" as const,
+        confidence: "high" as const,
+        staticSources: [{ script: "https://shop.example.com/_ng/main.js", line: 412 }],
+      },
+      { path: "/api/cart", status: "observed" as const, staticSources: [] },
+    ],
+    scriptsAnalysed: 110,
+    scriptsSkipped: 2,
+  };
+
+  it("lists what the code names and the scan never called", () => {
+    // §10A.3's whole value: the surface an application's own code describes
+    // and this run did not reach.
+    const markdown = renderReport(report({ staticApis: found }));
+    expect(markdown).toContain("110 script(s) parsed");
+    expect(markdown).toContain("2 skipped by a bound");
+    expect(markdown).toContain("/api/v2/orders/{id}");
+    expect(markdown).toContain("main.js:412");
+  });
+
+  it("does not repeat a candidate the inventory already lists", () => {
+    const markdown = renderReport(report({ staticApis: found }));
+    expect(markdown).toContain("1 the scan called");
+    // `/api/cart` was observed, so it belongs in the table above, once.
+    expect(markdown.split("/api/cart").length - 1).toBe(0);
+  });
+
+  it("keeps a candidate a candidate", () => {
+    // A string in a bundle is not an endpoint, and the report must not let
+    // a reader read it as one.
+    expect(renderReport(report({ staticApis: found }))).toMatch(/not an endpoint that exists/i);
+  });
+
+  it("distinguishes 'nothing was parsed' from 'nothing was found'", () => {
+    // Two different facts: one about this scan, one about the target.
+    // Collapsing them turns a missing capability into a clean result.
+    expect(renderReport(report())).toContain("No JavaScript was parsed");
+    expect(
+      renderReport(
+        report({ staticApis: { endpoints: [], scriptsAnalysed: 40, scriptsSkipped: 0 } }),
+      ),
+    ).toContain("No endpoint candidates were found");
+  });
+});
+
+describe("the API inventory says whose host it is", () => {
+  it("reports the party and the content type beside the role", () => {
+    // The content type is why most rows are there at all, and the party is
+    // what stops a reader dismissing the application's own API gateway as
+    // somebody else's property.
+    const markdown = renderReport(
+      report({
+        apis: [
+          {
+            method: "GET",
+            url: "https://data-search.shop.example.com/v1/cities",
+            status: 200,
+            contentType: "application/json",
+            party: "same-site",
+            role: "application_api",
+          },
+        ],
+      }),
+    );
+    expect(markdown).toContain("application/json");
+    expect(markdown).toContain("same-site");
   });
 });

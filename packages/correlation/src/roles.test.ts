@@ -396,3 +396,81 @@ describe("a repeated asset is not a heartbeat", () => {
     ).toBe("polling_heartbeat");
   });
 });
+
+describe("an endpoint is an endpoint whoever's host it is on", () => {
+  it("treats the application's own API gateway as first-party surface", () => {
+    // The case that prompted all of this. the reference application serves its pages from
+    // `the reference application` and its search API from
+    // `data-search.apigw.example.com` — a different origin, the same
+    // operator. Matching on origin alone filed that gateway under the same
+    // heading as an ad pixel, and the inventory dropped it: a scan of the
+    // real site reported an API inventory of `None` while the log held the
+    // gateway call.
+    expect(
+      roleOf({
+        url: "https://data-search.app.test/v1/suggestions/",
+        resourceType: "Fetch",
+        mimeType: "text/plain",
+      }),
+    ).toBe("application_api");
+  });
+
+  it("reports a third-party JSON endpoint rather than filing it as unknown", () => {
+    expect(
+      roleOf({
+        url: "https://api.vendor.example/ctx/v1/segment",
+        method: "POST",
+        resourceType: "XHR",
+        mimeType: "application/json",
+      }),
+    ).toBe("third_party_api");
+  });
+
+  it("does not promote a third-party document that merely arrived", () => {
+    // The control. The rule turns on two facts together: a structured body
+    // *and* application code having asked for it. Drop either and the
+    // verdict has to fall back, or every third-party iframe and font
+    // becomes an endpoint.
+    expect(
+      roleOf({
+        url: "https://api.vendor.example/embed",
+        resourceType: "Document",
+        mimeType: "application/json",
+      }),
+    ).not.toBe("third_party_api");
+
+    expect(
+      roleOf({
+        url: "https://api.vendor.example/embed",
+        resourceType: "Fetch",
+        mimeType: "text/html",
+      }),
+    ).toBe("unknown");
+  });
+
+  it("still files a known tracker as telemetry, JSON or not", () => {
+    // Ordering, asserted. The host lists run before the payload rule, so a
+    // JSON beacon to Google Analytics does not become an API because it
+    // happens to answer in JSON.
+    expect(
+      roleOf({
+        url: "https://www.google-analytics.com/g/collect",
+        method: "POST",
+        resourceType: "XHR",
+        mimeType: "application/json",
+      }),
+    ).toBe("analytics_telemetry");
+  });
+
+  it("keeps third-party endpoints out of workflow detection and coverage", () => {
+    // §17A.3's whole point. The inventory reports them; the consumers that
+    // would be misled by them do not see them. A workflow whose second step
+    // is a call to somebody's segmentation API is not one a reader can act
+    // on, and counting those endpoints in the coverage denominator makes a
+    // tracker-heavy page look under-explored.
+    expect(passesFilter("third_party_api", "api_inventory")).toBe(true);
+    expect(passesFilter("third_party_api", "workflow_detection")).toBe(false);
+    expect(passesFilter("third_party_api", "coverage")).toBe(false);
+    expect(passesFilter("third_party_api", "api_sequencing")).toBe(false);
+  });
+});

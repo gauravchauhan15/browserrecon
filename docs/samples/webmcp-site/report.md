@@ -23,7 +23,7 @@
 | Routes         | 2        | 2          | 100%  |
 | APIs (runtime) | 1        | 1          | 100%  |
 | API sequences  | 1        | 1          | 100%  |
-| WebMCP tools   | 3        | 3          | 100%  |
+| Agentic tools  | 3        | 3          | 100%  |
 | Origins        | 1        | 1          | 100%  |
 
 _Ratio is of what this scan discovered, never of what the application has._
@@ -34,17 +34,38 @@ _No workflows were detected._
 
 ## 3. API inventory
 
-| Method | URL                                         | Status | Role            |
-| ------ | ------------------------------------------- | ------ | --------------- |
-| GET    | `http://127.0.0.1:8080/api/products/search` | 200    | application_api |
+| Method | URL                                         | Status | Content type     | Party       | Role            |
+| ------ | ------------------------------------------- | ------ | ---------------- | ----------- | --------------- |
+| GET    | `http://127.0.0.1:8080/api/products/search` | 200    | application/json | first-party | application_api |
 
-## 4. WebMCP tools
+**Found via JS files:** 0 script(s) parsed. No endpoint candidates were found in them.
 
-| Tool             | Effect   | Endpoint               | Description                               |
-| ---------------- | -------- | ---------------------- | ----------------------------------------- |
-| `searchProducts` | unstated | `/api/products/search` | Search the catalog by keyword.            |
-| `addToCart`      | unstated | `/api/cart/items`      | Add a product to the current cart.        |
-| `deleteAccount`  | unstated | `/api/account`         | Permanently delete the signed-in account. |
+## 4. Agentic tools
+
+**3 tool(s)** — unstated 3
+
+```mermaid
+graph LR
+  root["http://127.0.0.1:8080"]
+  p0["/ (3)"]
+  root --> p0
+  t0["searchProducts"]
+  p0 --> t0
+  class t0 unstated
+  t1["addToCart"]
+  p0 --> t1
+  class t1 unstated
+  t2["deleteAccount"]
+  p0 --> t2
+  class t2 unstated
+  classDef unstated fill:#eaecee,stroke:#707b7c,stroke-width:2px,color:#1a1a1a
+```
+
+| Tool             | Effect   | Page | Endpoint               | Description                               |
+| ---------------- | -------- | ---- | ---------------------- | ----------------------------------------- |
+| `searchProducts` | unstated | `/`  | `/api/products/search` | Search the catalog by keyword.            |
+| `addToCart`      | unstated | `/`  | `/api/cart/items`      | Add a product to the current cart.        |
+| `deleteAccount`  | unstated | `/`  | `/api/account`         | Permanently delete the signed-in account. |
 
 _Tools are reported, never invoked (§7.2)._
 
@@ -53,27 +74,5 @@ _Tools are reported, never invoked (§7.2)._
 | Origin                  | Requests | Classification |
 | ----------------------- | -------- | -------------- |
 | `http://127.0.0.1:8080` | 3        | first_party    |
-
-## 6. JavaScript
-
-_None._
-
-## 7. Access barriers
-
-_None._
-
-_No barrier was bypassed. Barriers are recorded, never circumvented._
-
-## 8. Coverage gaps
-
-_None._
-
-## 9. Artifacts
-
-| File                  | Contents                   | Records |
-| --------------------- | -------------------------- | ------- |
-| `events-0001.jsonl`   | raw observations           | —       |
-| `attack-surface.json` | derived model              | 1       |
-| `surface.json`        | scanner-consumable surface | 5       |
 
 > /home/you/.output/sess_0001 contains UNREDACTED captured data — cookies, tokens, authorization headers and request bodies. Do not commit it, attach it to a ticket, or sync it to cloud storage.

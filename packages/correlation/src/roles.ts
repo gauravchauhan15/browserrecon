@@ -29,6 +29,7 @@
 
 export const TRAFFIC_ROLES = [
   "application_api",
+  "third_party_api",
   "application_asset",
   "auth_infrastructure",
   "analytics_telemetry",
@@ -195,6 +196,51 @@ function isFirstParty(url: string, origins: readonly string[]): boolean {
 }
 
 /**
+ * The registrable domain, approximated as the last two labels.
+ *
+ * Deliberately not a public-suffix list. A PSL is a data file that has to be
+ * shipped, versioned and refreshed, and its only effect here is on
+ * multi-label suffixes — `foo.co.uk` and `bar.co.uk` are read as one site.
+ * The consequence is bounded: at worst two unrelated hosts under the same
+ * public suffix are treated as the application's own, which lands them in
+ * the API inventory with a `same-site` basis a reader can disagree with.
+ * Getting `apigw.example.com` wrong, by contrast, loses the API gateway.
+ */
+function registrableDomain(host: string): string {
+  return host.split(".").slice(-2).join(".");
+}
+
+/**
+ * Whether a host is the application's own, one subdomain over.
+ *
+ * An application's API almost never lives on the origin its pages are served
+ * from. the reference application serves its pages from `the reference application` and its search API
+ * from `data-search.apigw.example.com`; matching on origin alone filed that
+ * gateway as somebody else's property and dropped it from the inventory —
+ * which is to say the scan found the API surface and then discarded it.
+ *
+ * Origin equality still wins where it applies; this is the fallback, and it
+ * is recorded in the verdict's signal so the weaker basis is visible.
+ */
+function isSameSite(url: string, origins: readonly string[]): boolean {
+  const host = hostOf(url);
+  if (host === "") return false;
+  const site = registrableDomain(host);
+  if (site === "" || !site.includes(".")) return false;
+  return origins.some((origin) => registrableDomain(hostOf(origin)) === site);
+}
+
+/**
+ * Resource types that mean application code made the request.
+ *
+ * `fetch()` and `XMLHttpRequest` are how a page calls an API; the browser
+ * never issues either on its own behalf. Used only to decide whether a
+ * structured response on a *third-party* host is an endpoint the application
+ * uses or a document that happens to be JSON.
+ */
+const DATA_FETCH_TYPES = new Set(["xhr", "fetch", "eventsource", "websocket"]);
+
+/**
  * The shortest gap that can be a poll rather than a burst.
  *
  * One second. Real heartbeats are seconds to minutes apart; nothing polls at
@@ -318,6 +364,35 @@ export function classifyTraffic(observation: ObservationForRole): RoleVerdict {
     };
   }
 
+  // One subdomain over is still the application. Checked after the asset and
+  // polling rules so a CDN subdomain serving bundles stays an asset.
+  if (isSameSite(observation.url, observation.firstPartyOrigins)) {
+    return {
+      role: "application_api",
+      signal: `same-site host ${host} carrying an application payload`,
+    };
+  }
+
+  // A structured body fetched by application code, on a host that is nobody
+  // the lists above recognised.
+  //
+  // This is an endpoint whatever its registrable domain: a JSON API on a
+  // vendor's host is still an API the application depends on, still takes
+  // parameters, and is still part of what an attacker can reach through this
+  // page. It gets its own role rather than `application_api` so the
+  // consumers that must not see it — workflow detection, API sequencing,
+  // the coverage denominator — can keep excluding it by name while the
+  // inventory reports it.
+  if (
+    DATA_TYPES.test(observation.mimeType ?? "") &&
+    DATA_FETCH_TYPES.has(observation.resourceType?.toLowerCase() ?? "")
+  ) {
+    return {
+      role: "third_party_api",
+      signal: `third-party ${observation.mimeType} fetched by application code`,
+    };
+  }
+
   // §17A.2's fallback: matches no first-party origin and carries no
   // application response payload.
   return { role: "unknown", signal: "third-party request that matches no rule" };
@@ -333,10 +408,20 @@ export function classifyTraffic(observation: ObservationForRole): RoleVerdict {
 export const CONSUMER_FILTERS: Readonly<Record<string, readonly TrafficRole[]>> = {
   /** Everything, unfiltered. The source of truth (§22). */
   event_store: TRAFFIC_ROLES,
-  correlation: ["application_api", "application_asset", "auth_infrastructure"],
+  correlation: [
+    "application_api",
+    "third_party_api",
+    "application_asset",
+    "auth_infrastructure",
+  ],
+  // Not `third_party_api`. A vendor's JSON endpoint belongs in the
+  // inventory, and a workflow built across the boundary between an
+  // application and its analytics provider is a workflow nobody can act on.
   workflow_detection: ["application_api", "auth_infrastructure"],
   api_sequencing: ["application_api"],
   llm_context: ["application_api"],
+  /** The inventory reports every endpoint, whoever operates it. */
+  api_inventory: ["application_api", "third_party_api", "auth_infrastructure"],
   /** Everything, grouped by role rather than filtered. */
   attack_surface_export: TRAFFIC_ROLES,
   /** So a tracker-heavy site does not report inflated coverage. */

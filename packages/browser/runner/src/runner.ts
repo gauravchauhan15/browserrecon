@@ -353,6 +353,14 @@ export function createRunner(options: RunnerOptions): Runner {
         };
       }
 
+      if (navigation.value.loadTimedOut === true) {
+        // §45: the page is kept and read, so the reason it may be thin has to
+        // be said somewhere rather than inferred from a short report.
+        log.warn("the page committed but did not finish loading in time", {
+          url: navigation.value.url,
+        });
+      }
+
       // Settling is best-effort by design: a page that never goes quiet —
       // polling, a websocket, an animation — is normal, and waiting forever
       // for one is how a scan of a real application never finishes.
@@ -399,6 +407,17 @@ export function createRunner(options: RunnerOptions): Runner {
         log.warn("a WebMCP registry was present but no tool could be read from it", {
           url: page.url,
           registries: page.webmcpRegistriesSeen.join(", "),
+        });
+      }
+
+      // The same rule one step along: a list cut off by the budget reads
+      // exactly like a complete one, so the only thing separating them is
+      // this line. the reference application registered its five tools across eleven
+      // seconds, and an earlier wait returned two of them with nothing said.
+      if (page.webmcpStillFilling) {
+        log.warn("tools were still being registered when the wait ran out", {
+          url: page.url,
+          found: page.webmcpTools.length,
         });
       }
 

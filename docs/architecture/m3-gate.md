@@ -15,21 +15,21 @@ self-validating, with WebMCP integrated into it.
 
 ## Proven
 
-| Criterion                                        | How                                                                                                                                                            |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Deterministic workflow/state/API graphs          | One real scan of `dynamic-site` assembles all four graphs; every state transition is `derived`, every workflow candidate carries the evidence that scored it   |
-| …before any AI exists                            | Every surface item is `observed`, no item carries a semantic layer, and the coverage score's provenance is `deterministic`                                     |
-| **Control 1** — polling is not a workflow        | Six heartbeats at a five-second interval are classified `polling_heartbeat` and never reach the API model or a candidate's routes                              |
-| **Control 2** — analytics is not a workflow step | A live scan of `noisy-site`: five beacons and five vendor scripts are absent from the surface and from every candidate, while `/api/catalog` survives          |
-| **Control 3** — ID-varying instances             | Forty calls to `/api/orders/{n}` become one API, one route, one surface item                                                                                   |
-| **Control 4** — one giant SPA workflow           | Five soft navigations cut a session into at least three candidates, none of them large                                                                         |
-| **Control 5** — parallel is not a chain          | A live scan of `parallel-site`: no dependency edge between concurrent requests, and no candidate credits one                                                   |
-| Coverage never claims completeness               | Score capped below 1 on a real scan, no "100%" or "complete" in its description, the §10C.6 caveat travels on the model, and an empty dimension scores nothing |
-| Attack-surface documented, versioned, validating | `surface.json` on disk matches the published schema version; `validateSurface` returns clean for it and rejects it with an empty known-id set                  |
-| §35B.5 chains resolve                            | Every link of every surface item's chain resolves against the log that scan wrote — walked, not asserted                                                       |
-| WebMCP integrated                                | A live scan of `webmcp-site` puts all three registered tools in the surface and in the report, each with source event ids, and none is invoked                 |
-| The artifacts say what the model says            | `report.md`'s inventory, coverage table, workflows, WebMCP tools and file list are read back and checked against the model that produced them                  |
-| Three runs byte-identical after normalisation    | Three consecutive scans of `parallel-site` produce identical APIs, states, workflows, surface, score and coverage                                              |
+| Criterion                                        | How                                                                                                                                                               |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deterministic workflow/state/API graphs          | One real scan of `dynamic-site` assembles all four graphs; every state transition is `derived`, every workflow candidate carries the evidence that scored it      |
+| …before any AI exists                            | Every surface item is `observed`, no item carries a semantic layer, and the coverage score's provenance is `deterministic`                                        |
+| **Control 1** — polling is not a workflow        | Six heartbeats at a five-second interval are classified `polling_heartbeat` and never reach the API model or a candidate's routes                                 |
+| **Control 2** — analytics is not a workflow step | A live scan of `noisy-site`: five beacons and five vendor scripts are absent from the surface and from every candidate, while `/api/catalog` survives             |
+| **Control 3** — ID-varying instances             | Forty calls to `/api/orders/{n}` become one API, one route, one surface item                                                                                      |
+| **Control 4** — one giant SPA workflow           | Five soft navigations cut a session into at least three candidates, none of them large                                                                            |
+| **Control 5** — parallel is not a chain          | A live scan of `parallel-site`: no dependency edge between concurrent requests, and no candidate credits one                                                      |
+| Coverage never claims completeness               | Score capped below 1 on a real scan, no "100%" or "complete" in its description, the §10C.6 caveat travels on the model, and an empty dimension scores nothing    |
+| Attack-surface documented, versioned, validating | `surface.json` on disk matches the published schema version; `validateSurface` returns clean for it and rejects it with an empty known-id set                     |
+| §35B.5 chains resolve                            | Every link of every surface item's chain resolves against the log that scan wrote — walked, not asserted                                                          |
+| Agentic tools integrated                         | A live scan of `webmcp-site` puts all three registered tools in the surface and in the report, each with source event ids, and none is invoked                    |
+| The artifacts say what the model says            | `report.md`'s inventory, coverage table, workflows and agentic tools are read back and checked against the model that produced them, and the files it names exist |
+| Three runs byte-identical after normalisation    | Three consecutive scans of `parallel-site` produce identical APIs, states, workflows, surface, score and coverage                                                 |
 
 ## What the gate found
 
@@ -322,3 +322,62 @@ live scan anywhere.
   after its first route because naming is §18.2's job and needs V4. A reader
   sees `/api/orders/pending` where they will later see "order review", and a
   label invented by the reporting layer would read like a finding.
+
+## What the first real target changed
+
+Gate A against `the reference application` produced a report whose API inventory read
+**None** beside a coverage score of 0.95, and the log it was built from held
+the endpoints. Four fixes followed, each written up in
+[decisions.md](decisions.md):
+
+- **Same-site is first-party enough.** `classifyTraffic` matched on exact
+  origin, so the application's own API gateway one subdomain over was
+  classified as somebody else's. A `third_party_api` role now reports an
+  endpoint on a genuinely foreign host without letting it into workflow
+  detection or the coverage denominator.
+- **A request is evidence without its response.** The API model only opened a
+  bucket on a response, so a call still in flight when the budget ended was
+  counted and listed nowhere. Unanswered `fetch`/XHR calls to the
+  application's own hosts are now listed with `no response` as the status —
+  and classified with the same repeat statistics as the answered ones, which
+  the gate caught: without them a beacon's last call became an API because
+  its response lost a race.
+- **A template literal is a shape, not a value.** `literalOf` refused
+  anything containing `${`, which is right for a value and was also deciding
+  candidate extraction. 110 minified bundles yielded zero candidates; they
+  now yield `/api/v2/orders/{id}`.
+- **The static pass was never wired in.** `javascript-discovery` had an
+  analyzer, a triage ranking, a bounded pipeline and a reconciler, all tested
+  and imported by nothing. The report's `static_api_candidate` column was
+  filled from the queue's skip list, which is why the gap was invisible.
+
+## The report lost four sections and gained a picture
+
+§35B.2's nine sections became five. The per-script JavaScript table, the
+access-barrier table, the coverage-gap table and the artifact index are
+written to `attack-surface.json` instead: on a real target the script table
+alone ran to 120 rows of cache-busted bundle names and pushed the findings
+three screens down.
+
+Two guarantees had to survive the cut, because both are about the report not
+reading as a clean bill of health:
+
+- §10C.6's gaps and §7.3's barrier statement are now one **Limits on this
+  scan** line under the coverage score, naming the counts and the file that
+  details them.
+- That exposed a second thing. The m1 gate asserted the report said
+  "never circumvented", and it passed because the sentence was
+  unconditional — the barrier list was fed from a failed login and nothing
+  else, so a scan that met a 403 on every admin route reported no barriers.
+  Barriers are now derived from the log's own 401/403/407/429/503 responses,
+  the `access_barrier` coverage dimension is populated for the first time,
+  and the gate asserts a barrier that was actually met.
+
+"WebMCP tools" is now "Agentic tools". WebMCP is one spelling of the thing
+and not the thing itself — the registries seen in the wild already differ —
+and what is being reported is the general fact that a page publishes named,
+schema'd operations any visiting agent can call. The section leads with a
+Mermaid diagram of target → page → tool, coloured by declared effect, because
+a registry is per page and a flat list of names cannot show which screen an
+agent has to be on to reach a destructive one. The event type, the schema
+field and the collector keep their names: those are a wire format.

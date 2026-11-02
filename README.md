@@ -73,15 +73,15 @@ A model of the application layer, assembled from runtime signals:
 - **API sequences** — ordered, with `caused_by` and `depends_on` relationships
 - **State transitions** — the state graph a workflow moves through
 - **Initiator chains** — interaction → script → request → response → next request
-- **WebMCP tools** — the operations a page publishes to any visiting agent,
-  reported and never invoked
+- **Agentic tools** — the operations a page publishes to any visiting agent,
+  reported and never invoked, with what each one declares it does to state
 - **JS-mined candidates** — endpoints extracted from JavaScript, marked as
   candidates until runtime confirms them
 - **Coverage accounting** — what was observed, what was not, and _why_, with a
   typed reason and a remedy for every gap
 
 The intent is an agent-era view of an application: Agent → Page →
-WebMCP/Tool → API → Workflow → State → Business Action.
+Tool → API → Workflow → State → Business Action.
 
 ## What it is not
 

@@ -93,6 +93,22 @@ function shell(): FixtureResponse {
       '<html lang="en"><head><title>Map-shaped WebMCP</title></head><body>',
       "<h1>Shop</h1>",
       "<script>",
+      // Registered **late**, which is the other thing production does.
+      //
+      // Every registry in this file used to appear in the first tick of the
+      // first inline script, so a harvest timed from `domcontentloaded`
+      // always won the race and the tests could not tell a scanner that
+      // waits from one that does not. the reference application defines
+      // `navigator.modelContext` roughly nine seconds after navigation — a
+      // polyfill, loaded as its own script — and registers its five tools
+      // later again. The scan read the page long before any of it and
+      // reported none.
+      //
+      // So the registry itself arrives on a timer, and the tools after it.
+      // Short enough to keep the suite quick, late enough that a harvest
+      // which does not wait reads an empty page and an adapter that waits
+      // only for the registry object reads an empty registry.
+      "setTimeout(function () {",
       // A registry shaped like the production one: a Map of wrappers, with
       // the descriptor under `item` and the schema also present as text.
       "  navigator.modelContext = navigator.modelContext || {",
@@ -127,9 +143,20 @@ function shell(): FixtureResponse {
       "    );",
       "  };",
       "  navigator.modelContext.getTools = function () { return this.tools; };",
-      `  for (const tool of ${JSON.stringify(WEBMCP_MAP_TOOLS)}) {`,
-      "    navigator.modelContext.registerTool(tool);",
-      "  }",
+      // In two batches with a gap, because that is how it happens. On
+      // the reference application the registry existed and held nothing for 7.9 seconds,
+      // then two tools appeared, then the other three 2.8 seconds later. A
+      // wait that stops as soon as the count pauses harvested two of the
+      // five and said nothing about the rest; one batch here could not have
+      // caught that.
+      `  const tools = ${JSON.stringify(WEBMCP_MAP_TOOLS)};`,
+      "  setTimeout(function () {",
+      "    for (const tool of tools.slice(0, 2)) navigator.modelContext.registerTool(tool);",
+      "    setTimeout(function () {",
+      "      for (const tool of tools.slice(2)) navigator.modelContext.registerTool(tool);",
+      "    }, 800);",
+      "  }, 600);",
+      "}, 900);",
       "</script>",
       "</body></html>",
     ].join("\n"),

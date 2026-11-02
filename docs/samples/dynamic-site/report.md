@@ -17,17 +17,18 @@
 
 **Coverage score 0.78** — 78% of the surface this scan could reach was observed or analysed. This is a proportion of what was reachable under the policy, session and budget in force — not of the application. 1 dimension(s) found nothing to measure and are excluded.
 
-| Dimension         | Observed | Discovered | Ratio |
-| ----------------- | -------- | ---------- | ----- |
-| Pages             | 7        | 7          | 100%  |
-| Routes            | 8        | 8          | 100%  |
-| JS assets         | 2        | 2          | 100%  |
-| First-party JS    | 2        | 2          | 100%  |
-| APIs (runtime)    | 3        | 3          | 100%  |
-| Workflows         | 0        | 1          | 0%    |
-| API sequences     | 1        | 1          | 100%  |
-| State transitions | 6        | 6          | 100%  |
-| Origins           | 1        | 1          | 100%  |
+| Dimension               | Observed | Discovered | Ratio |
+| ----------------------- | -------- | ---------- | ----- |
+| Pages                   | 7        | 7          | 100%  |
+| Routes                  | 8        | 8          | 100%  |
+| JS assets               | 2        | 2          | 100%  |
+| First-party JS          | 2        | 2          | 100%  |
+| APIs (runtime)          | 3        | 3          | 100%  |
+| API candidates (static) | 2        | 2          | 100%  |
+| Workflows               | 0        | 1          | 0%    |
+| API sequences           | 1        | 1          | 100%  |
+| State transitions       | 6        | 6          | 100%  |
+| Origins                 | 1        | 1          | 100%  |
 
 _Ratio is of what this scan discovered, never of what the application has._
 
@@ -46,45 +47,22 @@ _Ratio is of what this scan discovered, never of what the application has._
 
 ## 3. API inventory
 
-| Method | URL                                        | Status | Role            |
-| ------ | ------------------------------------------ | ------ | --------------- |
-| GET    | `http://127.0.0.1:8080/api/orders/pending` | 200    | application_api |
-| GET    | `http://127.0.0.1:8080/api/orders/archive` | 200    | application_api |
-| GET    | `http://127.0.0.1:8080/api/rows`           | 200    | application_api |
+| Method | URL                                        | Status | Content type     | Party       | Role            |
+| ------ | ------------------------------------------ | ------ | ---------------- | ----------- | --------------- |
+| GET    | `http://127.0.0.1:8080/api/orders/pending` | 200    | application/json | first-party | application_api |
+| GET    | `http://127.0.0.1:8080/api/orders/archive` | 200    | application/json | first-party | application_api |
+| GET    | `http://127.0.0.1:8080/api/rows`           | 200    | application/json | first-party | application_api |
 
-## 4. WebMCP tools
+**Found via JS files:** 2 script(s) parsed. 2 endpoint candidate(s): 2 the scan called, 0 correlated with a call, 0 never reached.
 
-_None._
+## 4. Agentic tools
+
+_This page published no tools to visiting agents._
 
 ## 5. Origins
 
 | Origin                  | Requests | Classification |
 | ----------------------- | -------- | -------------- |
 | `http://127.0.0.1:8080` | 13       | first_party    |
-
-## 6. JavaScript
-
-| Script                                  | Size  | Party | Analysis      |
-| --------------------------------------- | ----- | ----- | ------------- |
-| `http://127.0.0.1:8080/app.js`          | 1 KB  | first | body captured |
-| `http://127.0.0.1:8080/chunk-orders.js` | 241 B | first | body captured |
-
-## 7. Access barriers
-
-_None._
-
-_No barrier was bypassed. Barriers are recorded, never circumvented._
-
-## 8. Coverage gaps
-
-_None._
-
-## 9. Artifacts
-
-| File                  | Contents                   | Records |
-| --------------------- | -------------------------- | ------- |
-| `events-0001.jsonl`   | raw observations           | —       |
-| `attack-surface.json` | derived model              | 3       |
-| `surface.json`        | scanner-consumable surface | 4       |
 
 > /home/you/.output/sess_0001 contains UNREDACTED captured data — cookies, tokens, authorization headers and request bodies. Do not commit it, attach it to a ticket, or sync it to cloud storage.

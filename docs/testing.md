@@ -202,26 +202,36 @@ Everything lands in `~/browserrecon-runs/sess_NNNN/`.
 
 ### `report.md` — read this first
 
-Nine sections, always in the same order, so two runs diff cleanly.
+Five sections, always in the same order, so two runs diff cleanly.
 
 1. **Coverage summary** — the score, then the dimensions it was computed
    from. The score is capped below 1 by construction; it is a proportion of
-   what the scan could reach, never of the application.
+   what the scan could reach, never of the application. A **Limits on this
+   scan** line follows it wherever a coverage gap or an access barrier was
+   recorded, naming the counts and the file that details them.
 2. **Workflows** — candidates with the evidence that scored them. A
    low-confidence one is collapsed, never dropped.
-3. **API inventory** — application APIs. Pages, scripts and images are _not_
-   here; they are in `attack-surface.json` with the role that excluded them.
-4. **WebMCP tools** — what the page publishes to any visiting agent.
-   Reported, never invoked.
-5. **Origins** — first- and third-party, with request counts.
-6. **JavaScript** — the bundles, their size, and whether a body was captured.
-7. **Access barriers** — 401s, 403s, 429s, WAF and CAPTCHA challenges.
-8. **Coverage gaps** — what was not reached, why, and what to do about it.
-9. **Artifacts** — the files, with record counts.
+3. **API inventory** — every endpoint, with its content type, whose host it
+   is on, and §17A's role. Pages, scripts and images are _not_ here; they are
+   in `attack-surface.json` with the role that excluded them. Under the table,
+   **From JavaScript**: how many bundles were parsed, and the endpoints their
+   code names that this scan never called.
+4. **Agentic tools** — what the page publishes to any visiting agent, as a
+   diagram of target → page → tool and a table beneath it. Reported, never
+   invoked.
+5. **Origins** — first-party, same-site and third-party, with request counts.
+
+A sixth, **Security hypotheses**, appears only from V6.
+
+The per-script JavaScript table, the barrier table, the gap table and the
+artifact index are not report sections. They are in `attack-surface.json`,
+which is where a machine reads them from: on a real target the script table
+alone ran to 120 rows of cache-busted bundle names and pushed the findings
+three screens down.
 
 ### `surface.json` — the model a scanner would consume
 
-One item per thing on the surface: endpoints, WebMCP tools, origins. Each
+One item per thing on the surface: endpoints, agentic tools, origins. Each
 carries its workflow, the interaction that caused it, the state either side of
 it, the identity that observed it, and `source_event_ids` that resolve in the
 event log. The file validates against

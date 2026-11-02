@@ -5,10 +5,26 @@
  *
  * ## The section order is fixed, and that is the feature
  *
- * §35B.2 pins nine sections in one order so reports are **diffable across
+ * §35B.2 pins the sections in one order so reports are **diffable across
  * runs**. A report whose sections move is one nobody can compare to last
  * week's, and comparing to last week's is most of what a recurring scan is
  * for.
+ *
+ * ## What is reported and what is filed
+ *
+ * The report is the readable face of a session, not its complete contents.
+ * Four sections were cut — a per-script JavaScript table, access barriers,
+ * the coverage-gap table and the artifact index — because on a real target
+ * the first ran to 120 rows of bundle hashes and pushed the findings below
+ * three screens of scrolling.
+ *
+ * None of that data was dropped: it is in `attack-surface.json` and
+ * `surface.json` beside this file, which is where a machine was always meant
+ * to read it from. What the report keeps is the part §10C.6 makes
+ * non-negotiable — a reader must not be able to mistake it for a clean bill
+ * of health — so the coverage summary now carries one line naming the number
+ * of gaps and barriers recorded, and the §7.3 promise that no barrier was
+ * circumvented is kept wherever a barrier exists.
  *
  * ## It never claims complete coverage
  *
@@ -26,24 +42,29 @@ export const PACKAGE_NAME = "@browserrecon/exporter-markdown" as const;
 /**
  * §35B.2's fixed order. Exported so a test can assert against it.
  *
- * "WebMCP tools" is an addition to the nine the plan names, sitting with the
- * API inventory because that is what it is: a list of operations the page
+ * "Agentic tools" is an addition to the sections the plan names, sitting with
+ * the API inventory because that is what it is: a list of operations the page
  * publishes, usually wired straight to the endpoints above it. §21 and §44
  * make it part of the surface, and the first sample report produced for
  * review listed three registered tools in `surface.json` and mentioned none
- * of them here. Added now rather than later because the cost of renumbering
- * is a pre-release report nobody has archived.
+ * of them here.
+ *
+ * It is "Agentic tools" rather than "WebMCP tools" because WebMCP is one
+ * spelling of the thing and not the thing itself. The page-side registries
+ * seen in the wild already differ — `navigator.modelContext`, a polyfill's
+ * own global, a framework's wrapper — and a report headed with one vendor's
+ * protocol name reads as a report about that protocol. What is being
+ * reported is the general fact: this page publishes named, schema'd
+ * operations that any visiting agent can call. The event type, the schema
+ * field and the collector keep their names, because those are a wire format
+ * and renaming them would break every log already written.
  */
 export const SECTION_ORDER = [
   "Coverage summary",
   "Workflows",
   "API inventory",
-  "WebMCP tools",
+  "Agentic tools",
   "Origins",
-  "JavaScript",
-  "Access barriers",
-  "Coverage gaps",
-  "Artifacts",
   "Security hypotheses",
 ] as const;
 
@@ -53,7 +74,7 @@ export type SectionName = (typeof SECTION_ORDER)[number];
  * A section's heading, numbered from its position in `SECTION_ORDER`.
  *
  * Hand-written numbers next to an array index is a drift waiting to happen,
- * and it happened: inserting "WebMCP tools" at position four renumbered five
+ * and it happened: inserting a section at position four renumbered five
  * headings, and the JavaScript section came out labelled `## 9. Artifacts`.
  * The report had two section nines and no section six, which is the kind of
  * thing a reader notices before anything else on the page.
@@ -125,7 +146,51 @@ export interface ReportInput {
     readonly url: string;
     readonly status?: number | undefined;
     readonly role: string;
+    /**
+     * Whose host it is.
+     *
+     * Reported beside the role because the two answer different questions
+     * and a reader needs both. An application's own API gateway usually
+     * lives one subdomain over from its pages, so `third-party` here means
+     * "a different registrable domain", not "not worth your attention" —
+     * and a JSON endpoint on a vendor's host is still surface this page
+     * depends on.
+     */
+    readonly party?: "first-party" | "same-site" | "third-party" | undefined;
+    /** The response content type, which is why most of these are here. */
+    readonly contentType?: string | undefined;
   }[];
+  /**
+   * Endpoints the bundles named, settled against what was called (§10A.3).
+   *
+   * Absent when no parser ran, which the section renders differently from an
+   * empty list: "the bundles were not read" and "the bundles named nothing"
+   * are different facts and only one of them is about the target.
+   */
+  readonly staticApis?:
+    | {
+        readonly endpoints: readonly {
+          readonly path: string;
+          readonly status: "observed" | "correlated" | "unobserved";
+          readonly confidence?: "high" | "medium" | "low" | undefined;
+          readonly method?: string | undefined;
+          readonly staticSources: readonly {
+            readonly script: string;
+            readonly line: number;
+          }[];
+        }[];
+        readonly scriptsAnalysed: number;
+        readonly scriptsSkipped: number;
+        /**
+         * Scripts the parser could not finish.
+         *
+         * §10B.9 keeps a partial result rather than discarding it, so the
+         * candidates from one are real. Saying how many were partial is what
+         * stops "no candidates found" being read as "there are none".
+         */
+        readonly scriptsPartial?: number | undefined;
+      }
+    | undefined;
   /**
    * Tools the page registered — §21, §44.
    *
@@ -137,31 +202,42 @@ export interface ReportInput {
     readonly name: string;
     readonly endpoint?: string | undefined;
     readonly description?: string | undefined;
+    /** The page whose registry published it — the diagram's middle rank. */
+    readonly page?: string | undefined;
     /** What the page says it does, in MCP's own terms. Absent = unstated. */
     readonly effect?: "read_only" | "writes" | "destructive" | undefined;
   }[];
+  /**
+   * Pages actually read, which decides what an empty tool list means.
+   *
+   * A registry is published by script and never appears in traffic, so the
+   * only evidence that a page publishes no tools is a page that was read and
+   * found to publish none. With no page read there is no such evidence — and
+   * the section said "this page published no tools to visiting agents" about
+   * a scan whose browsing phase had failed outright, over a site publishing
+   * five. Absent when the caller does not know, which reads as "not stated"
+   * rather than as either answer.
+   */
+  readonly pagesRead?: number | undefined;
   readonly origins: readonly {
     readonly origin: string;
     readonly requests: number;
     readonly classification: string;
   }[];
-  readonly javascript: readonly {
-    readonly url: string;
-    readonly bytes?: number | undefined;
-    readonly firstParty: boolean;
-    readonly analysis: string;
-  }[];
+  /**
+   * Barriers met, counted into the coverage summary's limits line.
+   *
+   * No longer a table of its own. Still required input: §7.3's promise that
+   * a barrier was recorded rather than circumvented has to be printed
+   * wherever one exists, and the report cannot print what it is not given.
+   */
   readonly barriers: readonly {
     readonly category: string;
     readonly url: string;
     readonly evidence: string;
   }[];
+  /** Counted into the limits line, for the same reason (§10C.6, §10C.7). */
   readonly gaps: readonly CoverageGap[];
-  readonly artifacts: readonly {
-    readonly path: string;
-    readonly contents: string;
-    readonly records?: number | undefined;
-  }[];
   /** The session directory, so the warning names the path the reader has. */
   readonly outputDir?: string | undefined;
   /** Only present from V6. Absent means the section is omitted entirely. */
@@ -171,18 +247,6 @@ export interface ReportInput {
 
 /** Below this, a workflow is rendered collapsed but never omitted (§18.1). */
 const LOW_CONFIDENCE = 0.5;
-
-/**
- * Bytes as something a reader can compare at a glance.
- *
- * `48213` and `481230` look alike in a column; `47 KB` and `470 KB` do not,
- * and "which script is the big one" is most of why the column is there.
- */
-function humanBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function table(headers: readonly string[], rows: readonly (readonly string[])[]): string {
   if (rows.length === 0) return "_None._\n";
@@ -216,6 +280,192 @@ function renderWorkflow(workflow: WorkflowReport): string {
   return low
     ? `<details><summary>${workflow.name} — low confidence (${workflow.confidence.toFixed(2)})</summary>\n\n${body}\n</details>\n`
     : body;
+}
+
+/**
+ * What the bundles named, and whether the scan ever called it.
+ *
+ * §10A.3's line, rendered: a string in a bundle is a candidate, never an
+ * endpoint, and the status column is the only thing that promotes one. The
+ * `unobserved` rows are the point of the whole static pass — surface the
+ * application's own code names and this scan did not reach — so they are
+ * listed and the ones already in the table above are counted rather than
+ * repeated.
+ *
+ * `undefined` renders differently from an empty list on purpose. "No parser
+ * ran" is a fact about the scan; "the bundles named nothing" is a fact about
+ * the target, and conflating them turns a missing capability into a clean
+ * result.
+ */
+function renderStaticApis(staticApis: ReportInput["staticApis"]): string {
+  if (staticApis === undefined) {
+    return "_No JavaScript was parsed, so no static endpoint candidates were produced._\n";
+  }
+
+  const { endpoints, scriptsAnalysed, scriptsSkipped } = staticApis;
+  const partial = staticApis.scriptsPartial ?? 0;
+  const read =
+    `**Found via JS files:** ${scriptsAnalysed} script(s) parsed` +
+    (scriptsSkipped === 0 ? "" : `, ${scriptsSkipped} skipped by a bound`) +
+    (partial === 0 ? "" : `, ${partial} parsed only in part`) +
+    `.`;
+
+  if (endpoints.length === 0) {
+    return `${read} No endpoint candidates were found in them.\n`;
+  }
+
+  const counted = (status: string): number =>
+    endpoints.filter((endpoint) => endpoint.status === status).length;
+  const unobserved = endpoints.filter((endpoint) => endpoint.status === "unobserved");
+
+  const summary =
+    `${read} ${endpoints.length} endpoint candidate(s): ` +
+    `${counted("observed")} the scan called, ${counted("correlated")} correlated with a call, ` +
+    `${unobserved.length} never reached.`;
+
+  if (unobserved.length === 0) {
+    return `${summary}\n`;
+  }
+
+  return [
+    summary,
+    "",
+    "Endpoints named in the JavaScript, which this scan never called:",
+    "",
+    table(
+      ["Candidate", "Method", "Confidence", "Found in"],
+      unobserved.map((endpoint) => [
+        `\`${endpoint.path}\``,
+        endpoint.method ?? "—",
+        endpoint.confidence ?? "—",
+        endpoint.staticSources
+          .slice(0, 2)
+          .map(
+            (source) => `\`${source.script.split("/").pop() ?? source.script}:${source.line}\``,
+          )
+          .join(", ") || "—",
+      ]),
+    ),
+    "_A candidate is a string found in code, not an endpoint that exists (§10A.3)._",
+  ].join("\n");
+}
+
+/**
+ * How a tool's declared effect is drawn and described.
+ *
+ * One table, used by the diagram, the summary line and the detail table, so
+ * the three cannot drift apart. The colours are explicit rather than
+ * Mermaid's defaults because the default palette is unreadable on a dark
+ * background, and a security report that renders as light grey on grey is
+ * one nobody reads twice.
+ */
+const EFFECTS = [
+  {
+    key: "destructive",
+    label: "destructive",
+    className: "destructive",
+    style: "fill:#f9d6d5,stroke:#b03a2e,stroke-width:2px,color:#1a1a1a",
+  },
+  {
+    key: "writes",
+    label: "writes",
+    className: "writes",
+    style: "fill:#fdebd0,stroke:#b9770e,stroke-width:2px,color:#1a1a1a",
+  },
+  {
+    key: "read_only",
+    label: "read-only",
+    className: "readonly",
+    style: "fill:#d4efdf,stroke:#1e8449,stroke-width:2px,color:#1a1a1a",
+  },
+  {
+    key: "unstated",
+    label: "unstated",
+    className: "unstated",
+    style: "fill:#eaecee,stroke:#707b7c,stroke-width:2px,color:#1a1a1a",
+  },
+] as const;
+
+type EffectKey = (typeof EFFECTS)[number]["key"];
+
+function effectKey(effect: ReportInput["webmcpTools"][number]["effect"]): EffectKey {
+  return effect === undefined ? "unstated" : effect;
+}
+
+/** Mermaid labels are quoted, so a quote in a tool name has to go. */
+function mermaidLabel(text: string): string {
+  return text
+    .replace(/["\\]/g, "'")
+    .replace(/[\r\n]+/g, " ")
+    .trim();
+}
+
+/** The path a reader recognises, falling back to the whole URL. */
+function pageLabel(page: string): string {
+  try {
+    const url = new URL(page);
+    return url.pathname === "" ? "/" : url.pathname;
+  } catch {
+    return page;
+  }
+}
+
+/**
+ * The registry as a picture: target → page → tool.
+ *
+ * A flat table answers "what is published"; it does not answer "what does an
+ * agent have to be looking at to call this", which is the question that
+ * decides whether a destructive tool is one navigation away or behind a
+ * checkout flow. A registry is per page, so the page is the middle rank —
+ * and when an application publishes one set of tools on its home page and
+ * another in its account area, the shape of that is visible at a glance and
+ * invisible in a list of names.
+ *
+ * Mermaid rather than an image: it is text, so it diffs across runs like
+ * every other section, and GitHub, GitLab and most Markdown viewers render
+ * it without a build step.
+ */
+function renderToolDiagram(target: string, tools: ReportInput["webmcpTools"]): string {
+  const byPage = new Map<string, ReportInput["webmcpTools"][number][]>();
+  for (const tool of tools) {
+    const page = tool.page ?? target;
+    byPage.set(page, [...(byPage.get(page) ?? []), tool]);
+  }
+
+  const lines = ["```mermaid", "graph LR", `  root["${mermaidLabel(target)}"]`];
+  const used = new Set<EffectKey>();
+  let pageIndex = 0;
+  let toolIndex = 0;
+
+  for (const [page, published] of [...byPage.entries()].sort(([a], [b]) =>
+    a.localeCompare(b),
+  )) {
+    const pageId = `p${pageIndex}`;
+    pageIndex += 1;
+    lines.push(`  ${pageId}["${mermaidLabel(pageLabel(page))} (${published.length})"]`);
+    lines.push(`  root --> ${pageId}`);
+
+    for (const tool of published) {
+      const id = `t${toolIndex}`;
+      toolIndex += 1;
+      const key = effectKey(tool.effect);
+      used.add(key);
+      lines.push(`  ${id}["${mermaidLabel(tool.name)}"]`);
+      lines.push(`  ${pageId} --> ${id}`);
+      lines.push(
+        `  class ${id} ${EFFECTS.find((e) => e.key === key)?.className ?? "unstated"}`,
+      );
+    }
+  }
+
+  // Only the classes in use. An unused classDef is harmless but it makes the
+  // legend below disagree with the picture above it.
+  for (const effect of EFFECTS) {
+    if (!used.has(effect.key)) continue;
+    lines.push(`  classDef ${effect.className} ${effect.style}`);
+  }
+  lines.push("```");
+  return lines.join("\n");
 }
 
 export function renderReport(input: ReportInput): string {
@@ -268,6 +518,30 @@ export function renderReport(input: ReportInput): string {
 
   out.push("_Ratio is of what this scan discovered, never of what the application has._", "");
 
+  // §10C.6, kept after the gap table was cut. A report that stops mentioning
+  // its own limits reads as a clean bill of health, and that is the one
+  // reading this tool must never permit. One line, naming the counts and the
+  // file that holds the detail, rather than a table nobody read.
+  const limits: string[] = [];
+  if (input.gaps.length > 0) {
+    const total = input.gaps.reduce((sum, gap) => sum + gap.count, 0);
+    limits.push(
+      `${total} coverage gap(s) across ${input.gaps.length} reason(s) — ` +
+        `${input.gaps.map((gap) => `\`${gap.reason}\``).join(", ")}`,
+    );
+  }
+  if (input.barriers.length > 0) {
+    // §7.3: a reader has to be able to tell the barriers were recorded
+    // rather than defeated. Said wherever a barrier exists.
+    limits.push(`${input.barriers.length} access barrier(s) recorded and not circumvented`);
+  }
+  if (limits.length > 0) {
+    out.push(
+      `**Limits on this scan:** ${limits.join("; ")}. Detail in \`attack-surface.json\`.`,
+      "",
+    );
+  }
+
   out.push(heading("Workflows"), "");
   out.push(
     input.workflows.length === 0
@@ -278,37 +552,67 @@ export function renderReport(input: ReportInput): string {
   out.push(heading("API inventory"), "");
   out.push(
     table(
-      ["Method", "URL", "Status", "Role"],
+      ["Method", "URL", "Status", "Content type", "Party", "Role"],
       input.apis.map((api) => [
         api.method,
         `\`${api.url}\``,
-        String(api.status ?? "—"),
+        // Every endpoint built from a response carries a status, so an
+        // absent one means exactly one thing: the application called this
+        // and the scan ended before the answer arrived. "—" read as "not
+        // recorded", which is a different and less useful fact.
+        api.status === undefined ? "no response" : String(api.status),
+        api.contentType ?? "—",
+        api.party ?? "—",
         api.role,
       ]),
     ),
   );
+  out.push(renderStaticApis(input.staticApis), "");
 
-  out.push(heading("WebMCP tools"), "");
-  out.push(
-    table(
-      ["Tool", "Effect", "Endpoint", "Description"],
-      input.webmcpTools.map((tool) => [
-        `\`${tool.name}\``,
-        // The page's own claim, in its own terms. "unstated" is the honest
-        // rendering of silence — not "read-only".
-        tool.effect === "destructive"
-          ? "**destructive**"
-          : tool.effect === "writes"
-            ? "writes"
-            : tool.effect === "read_only"
-              ? "read-only"
-              : "unstated",
-        tool.endpoint === undefined ? "—" : `\`${tool.endpoint}\``,
-        tool.description ?? "—",
-      ]),
-    ),
-  );
-  if (input.webmcpTools.length > 0) {
+  out.push(heading("Agentic tools"), "");
+  if (input.webmcpTools.length === 0) {
+    out.push(
+      input.pagesRead === 0
+        ? "_No page was read, so whether this site publishes tools to visiting agents is unknown._\n"
+        : "_This page published no tools to visiting agents._\n",
+    );
+  } else {
+    // The picture first. What a reader needs from this section is "how much
+    // can an agent do here, and from where" — which is a shape, and a shape
+    // read off a thirty-row table is a shape read slowly.
+    const counts = EFFECTS.map((effect) => ({
+      ...effect,
+      n: input.webmcpTools.filter((tool) => effectKey(tool.effect) === effect.key).length,
+    })).filter((effect) => effect.n > 0);
+
+    out.push(
+      `**${input.webmcpTools.length} tool(s)** — ` +
+        counts.map((effect) => `${effect.label} ${effect.n}`).join(" · "),
+      "",
+    );
+    out.push(renderToolDiagram(header.target, input.webmcpTools), "");
+
+    out.push(
+      table(
+        ["Tool", "Effect", "Page", "Endpoint", "Description"],
+        input.webmcpTools.map((tool) => [
+          `\`${tool.name}\``,
+          // The page's own claim, in its own terms. "unstated" is the honest
+          // rendering of silence — not "read-only".
+          tool.effect === "destructive"
+            ? "**destructive**"
+            : tool.effect === "writes"
+              ? "writes"
+              : tool.effect === "read_only"
+                ? "read-only"
+                : "unstated",
+          tool.page === undefined ? "—" : `\`${pageLabel(tool.page)}\``,
+          tool.endpoint === undefined ? "—" : `\`${tool.endpoint}\``,
+          tool.description ?? "—",
+        ]),
+      ),
+    );
+
     // §7.2, and the reason this section exists at all. A page publishing a
     // state-changing operation to any agent that visits is the finding; the
     // catalogue of read-only ones around it is context.
@@ -346,45 +650,17 @@ export function renderReport(input: ReportInput): string {
     ),
   );
 
-  out.push(heading("JavaScript"), "");
-  out.push(
-    table(
-      ["Script", "Size", "Party", "Analysis"],
-      input.javascript.map((js) => [
-        `\`${js.url === "" ? "(inline)" : js.url}\``,
-        js.bytes === undefined ? "—" : humanBytes(js.bytes),
-        js.firstParty ? "first" : "third",
-        js.analysis,
-      ]),
-    ),
-  );
+  // The per-script table, the barrier table, the gap table and the artifact
+  // index used to sit here. They are written to `attack-surface.json` and
+  // `surface.json` instead: on a real target the script table alone ran to
+  // 120 rows of cache-busted bundle names, which is reference data for a
+  // machine and three screens of scrolling for a reader. What those sections
+  // carried that a reader still needs is in the coverage summary's limits
+  // line, above.
 
-  out.push(heading("Access barriers"), "");
-  out.push(
-    table(
-      ["Category", "URL", "Evidence"],
-      input.barriers.map((b) => [b.category, `\`${b.url}\``, b.evidence]),
-    ),
-  );
-  // §35B.2 asks for this explicitly, and §7.3 is why: a reader has to be
-  // able to tell that the barriers were recorded rather than defeated.
-  out.push("_No barrier was bypassed. Barriers are recorded, never circumvented._", "");
-
-  out.push(heading("Coverage gaps"), "");
-  out.push(
-    table(
-      ["Reason", "Count", "Remedy"],
-      input.gaps.map((gap) => [gap.reason, String(gap.count), gap.remedy]),
-    ),
-  );
-
-  out.push(heading("Artifacts"), "");
-  out.push(
-    table(
-      ["File", "Contents", "Records"],
-      input.artifacts.map((a) => [`\`${a.path}\``, a.contents, String(a.records ?? "—")]),
-    ),
-  );
+  // Not a section, and it stays whatever else is cut: the directory beside
+  // this file holds unredacted cookies, tokens and request bodies, and
+  // nothing else in the report says so.
   out.push(
     `> ${
       input.outputDir === undefined

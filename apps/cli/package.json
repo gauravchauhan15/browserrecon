@@ -23,6 +23,7 @@
     "@browserrecon/authorization": "workspace:*",
     "@browserrecon/browser-manager": "workspace:*",
     "@browserrecon/browser-runner": "workspace:*",
+    "@browserrecon/collector-javascript-discovery": "workspace:*",
     "@browserrecon/collector-network": "workspace:*",
     "@browserrecon/config": "workspace:*",
     "@browserrecon/core": "workspace:*",

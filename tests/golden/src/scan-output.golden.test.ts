@@ -142,25 +142,12 @@ const TIER0_REPORT: ReportInput = {
     { origin: "https://shop.example.com", requests: 84, classification: "first_party" },
     { origin: "https://cdn.example.net", requests: 12, classification: "third_party_cdn" },
   ],
-  javascript: [
-    {
-      url: "https://shop.example.com/app.js",
-      bytes: 48213,
-      firstParty: true,
-      analysis: "3 endpoints",
-    },
-    { url: "", firstParty: true, analysis: "inline bootstrap" },
-  ],
   barriers: [
     { category: "auth_wall", url: "https://shop.example.com/account", evidence: "evt_000103" },
   ],
   gaps: [
     { reason: "auth_required", count: 14, remedy: "Configure an auth profile and re-run." },
     { reason: "excluded_by_policy", count: 9, remedy: "Widen --allowed-paths if intended." },
-  ],
-  artifacts: [
-    { path: ".output/sess_0001/events.jsonl", contents: "raw observations", records: 1420 },
-    { path: ".output/sess_0001/attack-surface.json", contents: "derived model" },
   ],
 };
 
@@ -211,7 +198,6 @@ describe("end-of-scan output", () => {
                   classification: "first_party",
                 },
               ],
-              javascript: [],
               barriers: [
                 {
                   category: "auth_wall",
@@ -224,13 +210,6 @@ describe("end-of-scan output", () => {
                   reason: "auth_required",
                   count: 1,
                   remedy: "Configure an auth profile and re-run.",
-                },
-              ],
-              artifacts: [
-                {
-                  path: ".output/sess_0002/events.jsonl",
-                  contents: "raw observations",
-                  records: 9,
                 },
               ],
             }),

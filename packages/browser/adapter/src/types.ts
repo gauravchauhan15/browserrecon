@@ -84,6 +84,14 @@ export interface NavigationOutcome {
   readonly httpStatus?: number | undefined;
   /** True when the final URL differs from the one requested. */
   readonly redirected: boolean;
+  /**
+   * The document committed but the load did not finish inside the budget.
+   *
+   * The page is still worth reading — it is in the browser — but the caller
+   * is told, because "visited" and "visited in full" are different facts and
+   * a scan that cannot tell them apart will report the second for the first.
+   */
+  readonly loadTimedOut?: boolean | undefined;
 }
 
 /** Links, forms and interactive controls as they exist in the page right now. */
@@ -122,6 +130,15 @@ export interface PageHarvest {
    * how a production site's four tools went missing without a trace.
    */
   readonly webmcpRegistriesSeen: readonly string[];
+  /**
+   * The wait for the registry ended on its budget, not on the tools settling.
+   *
+   * Tools register in a trickle — the reference application's five arrived across eleven
+   * seconds — so a wait that runs out may have caught some and missed the
+   * rest. A truncated list that reads as complete is the same failure as an
+   * empty one that reads as complete, so the caller is told which it has.
+   */
+  readonly webmcpStillFilling: boolean;
   /** The URL these were read from, which may differ from the one requested. */
   readonly url: string;
 }

@@ -11,6 +11,9 @@
       "path": "../../packages/api-model"
     },
     {
+      "path": "../../packages/collectors/javascript-discovery"
+    },
+    {
       "path": "../../packages/core"
     },
     {

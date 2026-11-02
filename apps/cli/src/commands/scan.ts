@@ -23,7 +23,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import {
   buildSessionAuthorization,
   createRecord,
@@ -90,6 +90,7 @@ import {
 } from "@browserrecon/policy";
 import { createTokenBucket } from "@browserrecon/rate-controller";
 import { CliError, EXIT_CODES } from "../exit-codes.js";
+import { analyzeCapturedScripts, type StaticAnalysisResult } from "../static-analysis.js";
 import { collectCliValues } from "../options.js";
 import { policySummaryFor } from "./resume.js";
 import { formatSummary, resolveSummaryMode, type ScanSummary } from "./summary.js";
@@ -373,6 +374,7 @@ export async function scan(input: ScanCommandInput): Promise<void> {
 
   const excluded: { url: string; reason: string }[] = [];
   let assembled: AssembledModel | undefined;
+  let staticAnalysis: StaticAnalysisResult | undefined;
   const discovery = [
     createBrowserNativeDiscovery({
       // The same engine the queue and the adapter use. A sitemap index
@@ -472,12 +474,30 @@ export async function scan(input: ScanCommandInput): Promise<void> {
           // here rather than from the in-memory collector so the artifacts
           // and a later `browserrecon export` of the same session cannot
           // disagree — the log is the source of truth (§22.1).
+          // `resolveExternal`, because everything below analyses payloads.
+          // §22.2 externalizes the whole payload of an oversized event, so
+          // without this the largest responses of the scan arrive with no
+          // url, no mime type and no body — and contribute nothing, silently.
+          const events = await readAllEvents(sessionDir, { resolveExternal: true });
+
+          // §10A: read the bundles the scan captured. Done here rather than
+          // during the crawl because the bodies are already in the log, so
+          // this is a pure function of it — and because a parser has no
+          // business on the critical path of a rate-limited visit loop.
+          staticAnalysis = await analyzeCapturedScripts({
+            events,
+            firstPartyOrigins: [...policy.allowedOrigins],
+            pageOrigin: policy.targetOrigin,
+          });
+
           assembled = assemble({
             sessionId,
             target: policy.targetOrigin,
-            events: await readAllEvents(sessionDir),
+            events,
             firstPartyOrigins: [...policy.allowedOrigins],
             unreached: gapInputs(queue.skipped, excluded, queue.pending),
+            staticCandidates: staticAnalysis.candidates,
+            staticBasePaths: staticAnalysis.basePaths,
           });
 
           return writeArtifacts(
@@ -489,6 +509,7 @@ export async function scan(input: ScanCommandInput): Promise<void> {
             exportInput,
             network.model,
             assembled,
+            staticAnalysis,
             {
               state: authState,
               ...(authOutcome === undefined || authOutcome.status === "authenticated"
@@ -745,6 +766,8 @@ async function writeArtifacts(
   },
   model: NetworkModel,
   assembled: AssembledModel,
+  /** What the parser read, so the report can say how much was read. */
+  staticAnalysis: StaticAnalysisResult | undefined,
   auth: {
     /** The identity the scan observed under. `anonymous` unless a login landed. */
     readonly state: string;
@@ -757,11 +780,42 @@ async function writeArtifacts(
   const reportPath = join(sessionDir, "report.md");
   const { apis } = toExportedApis(model.observations);
 
+  // §7.3's list, built once and used by both artifacts. Two lists would be
+  // two answers to "what stopped this scan", in files written side by side.
+  //
+  // The login failure is here rather than in `assemble` because only the CLI
+  // knows a login was attempted: a wrong password can come back 200 with the
+  // form still on the page, which is invisible in the log.
+  const barriers = [
+    ...(auth.failure === undefined
+      ? []
+      : [
+          {
+            category: "authentication",
+            url: policy.targetOrigin,
+            evidence: `${auth.failure.status}: ${auth.failure.detail}`,
+          },
+        ]),
+    // Everything the log itself shows: 401s, 403s, 429s. This used to be the
+    // failed login and nothing else, so a scan that met a 403 on every admin
+    // route reported no barriers — beneath a standing sentence saying none
+    // had been circumvented, which was true and about nothing.
+    ...assembled.barriers.map((barrier) => ({
+      category: barrier.category,
+      url: barrier.url,
+      evidence: `${barrier.evidence} (${barrier.eventId})`,
+    })),
+  ];
+
   const origins = [...model.origins]
     .map((group) => ({
       origin: group.origin,
       requests: group.requests,
-      classification: group.origin === policy.targetOrigin ? "first_party" : "third_party",
+      // The same question the API table's Party column answers, answered
+      // once. Two tables in one report disagreeing about whether
+      // `data-search.apigw.example.com` is the application's own host is a
+      // report a reader cannot use.
+      classification: partyOf(group.origin, policy.allowedOrigins).replace("-", "_"),
     }))
     .sort((a, b) => a.origin.localeCompare(b.origin));
 
@@ -791,7 +845,7 @@ async function writeArtifacts(
       workflows: exportedWorkflows(assembled),
       apiSequences: assembled.sequences.sequences,
       javascript: exportedJavascript(model),
-      barriers: [],
+      barriers,
       coverageGaps: assembled.gaps,
       unreachedCandidateAssociations: [],
     },
@@ -860,6 +914,7 @@ async function writeArtifacts(
       },
       score: { value: assembled.score.score, description: assembled.score.description },
       coverage: coverageRows(assembled, exportInput),
+      pagesRead: exportInput.pagesVisited,
       // §21, §44. Registering a tool sends nothing, so this is the one part
       // of the surface that never appears in traffic — and the report is
       // where a person finds out the page hands agents a `deleteAccount`.
@@ -867,65 +922,53 @@ async function writeArtifacts(
         name: tool.name,
         ...(tool.endpoint === undefined ? {} : { endpoint: tool.endpoint }),
         ...(tool.description === undefined ? {} : { description: tool.description }),
+        ...(tool.page === undefined ? {} : { page: tool.page }),
         ...(tool.effect === undefined ? {} : { effect: tool.effect }),
       })),
       workflows: reportWorkflows(assembled),
-      apis: assembled.api.apis.map((api) => ({
-        method: api.method,
-        url: api.url,
-        ...(api.statuses[0] === undefined ? {} : { status: api.statuses[0] }),
-        role: api.role,
-      })),
+      apis: assembled.api.apis.map((api) => {
+        const first = api.observations[0];
+        return {
+          method: api.method,
+          url: api.url,
+          ...(api.statuses[0] === undefined ? {} : { status: api.statuses[0] }),
+          ...(first?.contentType === undefined ? {} : { contentType: first.contentType }),
+          party: partyOf(api.identity.origin, policy.allowedOrigins),
+          role: api.role,
+        };
+      }),
+      ...(staticAnalysis === undefined || assembled.staticApis === undefined
+        ? {}
+        : {
+            staticApis: {
+              endpoints: assembled.staticApis.endpoints.map((endpoint) => ({
+                path: endpoint.path,
+                status: endpoint.status,
+                ...(endpoint.confidence === undefined
+                  ? {}
+                  : { confidence: endpoint.confidence }),
+                ...(endpoint.method === undefined ? {} : { method: endpoint.method }),
+                staticSources: endpoint.staticSources,
+              })),
+              scriptsAnalysed: staticAnalysis.analysed,
+              scriptsSkipped: Object.values(staticAnalysis.skipped).reduce(
+                (total, count) => total + count,
+                0,
+              ),
+              scriptsPartial: staticAnalysis.partial,
+            },
+          }),
       origins,
-      javascript: exportedJavascript(model).map((asset) => ({
-        url: asset.url,
-        ...(asset.bytes === undefined ? {} : { bytes: asset.bytes }),
-        firstParty: asset.first_party,
-        analysis: asset.analysis,
-      })),
       // §8.6, §45: a login that did not land is a barrier, and the pages
       // behind it are unreached rather than absent. Reported here because a
       // report that silently describes the anonymous surface of an
       // application the user meant to scan signed in is the most misleading
       // output this tool could produce.
-      barriers:
-        auth.failure === undefined
-          ? []
-          : [
-              {
-                category: "authentication",
-                url: policy.targetOrigin,
-                evidence: `${auth.failure.status}: ${auth.failure.detail}`,
-              },
-            ],
+      barriers,
       // The typed queue, with §10C.7's own responses — not a second remedy
       // table that can drift from it.
       gaps: gapRows(assembled),
       outputDir: sessionDir,
-      // Named relative to the session directory, which is where the report
-      // itself sits and is named just above. The absolute paths were
-      // correct and unreadable — three wrapped lines of temp directory to
-      // say `events-0001.jsonl`.
-      //
-      // The filenames are read from disk. `events.jsonl` was a guess, and
-      // the store writes numbered segments, so every report before this
-      // pointed at a file that does not exist.
-      artifacts: [
-        ...readdirSync(sessionDir)
-          .filter((name) => name.startsWith("events-") && name.endsWith(".jsonl"))
-          .sort()
-          .map((name) => ({ path: name, contents: "raw observations" })),
-        {
-          path: basename(jsonPath),
-          contents: "derived model",
-          records: assembled.api.apis.length,
-        },
-        {
-          path: basename(surfacePath),
-          contents: "scanner-consumable surface",
-          records: assembled.surface.items.length,
-        },
-      ],
     }),
     { mode: 0o600 },
   );
@@ -1073,7 +1116,7 @@ const DIMENSION_LABELS: Readonly<Record<string, string>> = {
   workflow: "Workflows",
   api_sequence: "API sequences",
   state_transition: "State transitions",
-  webmcp: "WebMCP tools",
+  webmcp: "Agentic tools",
   origin: "Origins",
   access_barrier: "Access barriers",
 };
@@ -1266,6 +1309,38 @@ function withModelContext(
 }
 
 /** The origin of a URL, or the URL itself when it will not parse. */
+/**
+ * Whose host an endpoint is on.
+ *
+ * Three answers rather than two, because the two-answer version was wrong
+ * about the case that matters most. the reference application serves its pages from
+ * `the reference application` and its search API from `data-search.apigw.example.com`;
+ * "not the target origin" filed the application's own API gateway under the
+ * same heading as a Google ad pixel, and the inventory dropped it.
+ *
+ * `same-site` is the honest middle: a different origin, the same registrable
+ * domain, almost always the same operator — and "almost always" is why it is
+ * a label a reader can disagree with rather than a silent promotion to
+ * first-party.
+ */
+function partyOf(
+  origin: string,
+  allowedOrigins: ReadonlySet<string> | readonly string[],
+): "first-party" | "same-site" | "third-party" {
+  const allowed = [...allowedOrigins];
+  if (allowed.includes(origin)) return "first-party";
+  const site = (value: string): string => {
+    try {
+      return new URL(value).hostname.toLowerCase().split(".").slice(-2).join(".");
+    } catch {
+      return "";
+    }
+  };
+  const own = site(origin);
+  if (own !== "" && allowed.some((entry) => site(entry) === own)) return "same-site";
+  return "third-party";
+}
+
 function originOf(url: string): string {
   try {
     return new URL(url).origin;

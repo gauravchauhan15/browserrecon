@@ -25,7 +25,7 @@
  * could never be re-analysed with better rules.
  */
 import { normalizeUrl, type NormalizedUrl } from "@browserrecon/collector-network";
-import { classifyTraffic, type TrafficRole } from "@browserrecon/correlation";
+import { CONSUMER_FILTERS, classifyTraffic, type TrafficRole } from "@browserrecon/correlation";
 import type { EventEnvelope } from "@browserrecon/events";
 import {
   ParameterTally,
@@ -186,7 +186,40 @@ function queryOf(raw: string): Record<string, string> {
   }
 }
 
-const DEFAULT_ROLES: ReadonlySet<TrafficRole> = new Set<TrafficRole>(["application_api"]);
+/**
+ * Roles the model keeps by default — §17A.3's `api_inventory` consumer.
+ *
+ * Three, not one. The default used to be `application_api` alone, which cost
+ * two whole categories of endpoint before any consumer could decide about
+ * them:
+ *
+ *  - `auth_infrastructure`. §17A.3 lists it under workflow detection, so
+ *    workflow detection was filtering for a role the model had already
+ *    discarded. A login endpoint — the single most interesting POST on most
+ *    applications — could not appear in the inventory at all.
+ *  - `third_party_api`. An application's JSON endpoints are not all on its
+ *    own registrable domain, and the ones that are not are still endpoints.
+ *
+ * Narrowing happens at each consumer instead, where the reason to narrow is
+ * known. A model that dropped them here left no consumer the choice.
+ */
+/**
+ * Resource types that make an unanswered request worth listing.
+ *
+ * `fetch` and `XMLHttpRequest` are how application code calls an endpoint.
+ * A document, an image or a script that never arrived is a page or an asset
+ * that failed to load, which is a different fact and not an API.
+ */
+const UNANSWERED_RESOURCE_TYPES: ReadonlySet<string> = new Set(["xhr", "fetch", "eventsource"]);
+
+/** The key `classified` is indexed by — method and normalized identity. */
+function identityKeyOf(method: string, identity: string): string {
+  return `${method} ${identity}`;
+}
+
+const DEFAULT_ROLES: ReadonlySet<TrafficRole> = new Set<TrafficRole>(
+  CONSUMER_FILTERS.api_inventory as readonly TrafficRole[],
+);
 
 /**
  * Build the model from a log.
@@ -280,6 +313,8 @@ export function buildApiModel(
 ): ApiModel {
   const keep = options.roles ?? DEFAULT_ROLES;
   const pending = new Map<string, Pending>();
+  /** Requests the browser cancelled — counted, never listed as endpoints. */
+  let abandoned = 0;
   const buckets = new Map<string, Bucket>();
   const excluded = new Map<TrafficRole, number>();
   /** Every endpoint's verdict, by identity key, in first-seen order. */
@@ -339,6 +374,25 @@ export function buildApiModel(
       const payload = envelope.payload as RequestPayload;
       const url = normalizeUrl(payload.url);
       pending.set(`${payload.targetId ?? ""}:${payload.requestId}`, { envelope, payload, url });
+      continue;
+    }
+
+    // A request the browser gave up on. Removed from `pending` so the pass
+    // below cannot mistake it for a call the scan cut off.
+    //
+    // The two look identical in a bucket keyed on responses, and they are
+    // not the same fact. `fetch(beacon)` with nothing awaiting it is
+    // cancelled the moment the page navigates — which is what an analytics
+    // beacon *is* — while a request still in flight when the budget ends is
+    // an endpoint the application called and the scan did not wait for. The
+    // §18.1 control fixture caught this: admitting both put `/vendor/collect`
+    // in the attack surface.
+    if (envelope.type === "network_failed") {
+      const failedPayload = envelope.payload as { requestId?: string; targetId?: string };
+      if (failedPayload.requestId !== undefined) {
+        const failedKey = `${failedPayload.targetId ?? ""}:${failedPayload.requestId}`;
+        if (pending.delete(failedKey)) abandoned += 1;
+      }
       continue;
     }
 
@@ -460,6 +514,97 @@ export function buildApiModel(
     }
   }
 
+  // ---- requests the scan never saw answered ------------------------------
+  //
+  // §45: no silent loss. Until now a request whose response never arrived
+  // was counted in `unanswered` and otherwise discarded, because a bucket
+  // was only ever opened on the response. That is the wrong end of the
+  // exchange to key on: the *request* is the evidence that the application
+  // calls an endpoint, and the response only adds a status and a shape.
+  //
+  // The cost was exact and reproducible. A scan of the reference application called
+  // `https://data-search.apigw.example.com/v1/suggestions/`, the budget
+  // ended the session before the response landed, and the report's API
+  // inventory read `None` — while the log it was derived from held the call.
+  //
+  // Narrow on purpose. Without a response there is no content type, so the
+  // payload rules cannot run and `classifyTraffic` would be guessing. The
+  // only ones admitted are requests the application's own code made, to a
+  // host that is the application's own: `fetch`/XHR, first-party or
+  // same-site. Everything else stays counted and unlisted.
+  for (const unanswered of pending.values()) {
+    const resourceType = unanswered.payload.resourceType?.toLowerCase() ?? "";
+    if (!UNANSWERED_RESOURCE_TYPES.has(resourceType)) continue;
+
+    // The same signals the answered path gets, minus the ones a response
+    // carries. §17A.2's repeat statistics are measured over the whole log,
+    // so they are available here — and leaving them out made the verdict
+    // depend on whether a response happened to land before the scan ended.
+    //
+    // The M3 gate found it on the fixture built for exactly this: a beacon
+    // fired on every page load classifies as `polling_heartbeat` while its
+    // responses arrive, and the one still in flight at the end came back
+    // `application_api` and reached the surface. One endpoint, two verdicts,
+    // decided by a race.
+    const repeat = repeats.get(
+      identityKeyOf(unanswered.payload.method, unanswered.url.identity),
+    );
+    const verdict = classifyTraffic({
+      url: unanswered.url.raw,
+      method: unanswered.payload.method,
+      firstPartyOrigins: options.firstPartyOrigins ?? [],
+      resourceType: unanswered.payload.resourceType ?? "",
+      followedInteraction: repeat?.followedInteraction ?? false,
+      repeatCount: repeat?.count ?? 1,
+      ...(repeat?.intervalMs === undefined ? {} : { repeatIntervalMs: repeat.intervalMs }),
+      ...(repeat?.jitter === undefined ? {} : { repeatJitter: repeat.jitter }),
+    });
+    // Only the application's own. A third-party endpoint with no response is
+    // a host that did not answer, which is not a finding about this target.
+    if (verdict.role !== "application_api" && verdict.role !== "auth_infrastructure") continue;
+    if (!keep.has(verdict.role)) continue;
+
+    const identity = apiIdentity(unanswered.payload.method, unanswered.url);
+    if (buckets.has(identity.key)) continue;
+
+    const bucket: Bucket = {
+      identity,
+      role: verdict.role,
+      observations: [
+        {
+          sequence: unanswered.envelope.sequence,
+          // No response, so no response sequence. Pointing it at the
+          // request's own would read as an exchange that completed.
+          responseSequence: unanswered.envelope.sequence,
+          eventId: unanswered.envelope.event_id,
+          url: unanswered.url.raw,
+          authContext: unanswered.envelope.auth_context,
+          initiator: buildInitiatorChain(unanswered.payload.initiator),
+        },
+      ],
+      parameters: new ParameterTally(),
+      request: new ShapeBuilder(),
+      response: new ShapeBuilder(),
+      statuses: new Set<number>(),
+      sourceEventIds: [unanswered.envelope.event_id],
+      initiatingScripts: new Set<string>(),
+      sawRequestBody: false,
+      sawResponseBody: false,
+    };
+    bucket.parameters.add(queryOf(unanswered.url.raw));
+    buckets.set(identity.key, bucket);
+    order.push(identity.key);
+
+    if (!classified.has(identityKeyOf(unanswered.payload.method, unanswered.url.identity))) {
+      classified.set(identityKeyOf(unanswered.payload.method, unanswered.url.identity), {
+        method: unanswered.payload.method,
+        identity: unanswered.url.identity,
+        role: verdict.role,
+        signal: `${verdict.signal}; the scan ended before the response arrived`,
+      });
+    }
+  }
+
   // Identity keys are stable within a build; api_ids are assigned by first
   // appearance, so the edges are translated after numbering rather than
   // during, when the numbers do not exist yet.
@@ -518,7 +663,10 @@ export function buildApiModel(
     excluded: [...excluded.entries()]
       .map(([role, count]) => ({ role, count }))
       .sort((a, b) => b.count - a.count || a.role.localeCompare(b.role)),
-    unanswered: pending.size,
+    // Both kinds: the ones the browser abandoned and the ones still in
+    // flight. §45 counts everything that never came back; only the second
+    // kind is listed above, and only then under the narrow conditions there.
+    unanswered: pending.size + abandoned,
   };
 }
 

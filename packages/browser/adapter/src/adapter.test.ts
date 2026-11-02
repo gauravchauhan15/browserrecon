@@ -15,7 +15,15 @@ import {
   type BrowserSession,
   type ChromeProbes,
 } from "@browserrecon/browser-manager";
-import { startFixture, staticSite, restApi, type RunningFixture } from "@browserrecon/fixtures";
+import {
+  startFixture,
+  staticSite,
+  restApi,
+  throttledApi,
+  webmcpMapSite,
+  WEBMCP_MAP_TOOLS,
+  type RunningFixture,
+} from "@browserrecon/fixtures";
 import { PolicyEngine, defaultTargetPolicy, type TargetPolicy } from "@browserrecon/policy";
 import { PuppeteerBrowserAdapter, policyActionFor } from "./puppeteer-adapter.js";
 import { ADAPTER_ACTIONS, type ActionResult } from "./types.js";
@@ -543,5 +551,154 @@ describe("driving a fixture", () => {
       }
     },
     60_000,
+  );
+});
+
+describe("a page the browser is still loading", () => {
+  let slow: RunningFixture | undefined;
+  let session: BrowserSession | undefined;
+
+  beforeAll(async () => {
+    if (!chrome.found) return;
+    slow = await startFixture(throttledApi());
+    session = await launchBrowser({
+      sessionId: "sess_0005",
+      probes,
+      profileRoot: mkdtempSync(join(tmpdir(), "br-adapter-slow-")),
+      sweepOrphans: false,
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await session?.close();
+    await slow?.close();
+  });
+
+  browserTest(
+    "is kept when the load times out after the document committed",
+    async () => {
+      // the reference application did not reach `domcontentloaded` inside the action
+      // budget. `goto` threw, the navigation was recorded as failed, and the
+      // scan reported "no page was loaded" over a log already holding 126
+      // requests and 23 parsed bundles — nothing was harvested, so the whole
+      // DOM and agentic surface was silently missing from the report.
+      //
+      // `/api/never` commits headers and a first chunk and then never ends,
+      // which is that page without the fourteen-second wait.
+      const origin = slow?.origin ?? "";
+      const engine = new PolicyEngine(policyFor(origin));
+      const adapter = await PuppeteerBrowserAdapter.create({
+        session: session as BrowserSession,
+        engine,
+      });
+
+      try {
+        const result = await adapter.navigate(`${origin}/api/never`, { timeoutMs: 2_000 });
+        expect(result.status, "a committed document was discarded").toBe("ok");
+        if (result.status !== "ok") return;
+        expect(result.value.url).toBe(`${origin}/api/never`);
+        // Said out loud: a page read mid-load may be thin, and a scan that
+        // cannot tell "visited" from "visited in full" reports the second.
+        expect(result.value.loadTimedOut).toBe(true);
+      } finally {
+        await adapter.close();
+      }
+    },
+    60_000,
+  );
+
+  browserTest(
+    "is still a failure when nothing committed at all",
+    async () => {
+      // The other half of the rule above, and the one that keeps it honest.
+      // A navigation that times out before it commits leaves the *previous*
+      // page in the tab. Treating that as success files the old page's
+      // links, forms and tools under the new URL — a scan reporting a page
+      // the browser never opened, which is the failure this adapter's own
+      // redirect check exists to prevent.
+      const origin = slow?.origin ?? "";
+      const engine = new PolicyEngine(policyFor(origin));
+      const adapter = await PuppeteerBrowserAdapter.create({
+        session: session as BrowserSession,
+        engine,
+      });
+
+      try {
+        const first = await adapter.navigate(`${origin}/api/items`);
+        expect(first.status).toBe("ok");
+
+        // Too little time to commit anything, from a page that is already
+        // loaded — so `page.url()` still reads as the previous page.
+        const result = await adapter.navigate(`${origin}/api/never`, { timeoutMs: 1 });
+        expect(result.status, "an uncommitted navigation was reported as a visit").toBe(
+          "failed",
+        );
+        expect(adapter.currentUrl).toBe(`${origin}/api/items`);
+      } finally {
+        await adapter.close();
+      }
+    },
+    60_000,
+  );
+});
+
+describe("a tool registry published late", () => {
+  let site: RunningFixture | undefined;
+  let session: BrowserSession | undefined;
+
+  beforeAll(async () => {
+    if (!chrome.found) return;
+    site = await startFixture(webmcpMapSite());
+    session = await launchBrowser({
+      sessionId: "sess_0006",
+      probes,
+      profileRoot: mkdtempSync(join(tmpdir(), "br-adapter-late-")),
+      sweepOrphans: false,
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await session?.close();
+    await site?.close();
+  });
+
+  browserTest(
+    "is waited for, rather than read past",
+    async () => {
+      // A registry is published by script, and the scripts that publish one
+      // run late: the reference application defined `navigator.modelContext` about nine
+      // seconds after navigation and registered its five tools later again.
+      // The harvest read the page at `domcontentloaded` and found nothing,
+      // which the report printed as "this page published no tools".
+      //
+      // Every fixture registry used to appear in the first tick, so no test
+      // could tell a harvest that waits from one that does not. This one
+      // arrives on a timer, and the tools after it — which also covers the
+      // in-between state, a registry object present and still empty.
+      const origin = site?.origin ?? "";
+      const engine = new PolicyEngine(policyFor(origin));
+      const adapter = await PuppeteerBrowserAdapter.create({
+        session: session as BrowserSession,
+        engine,
+      });
+
+      try {
+        expect((await adapter.navigate(`${origin}/`)).status).toBe("ok");
+
+        // Deliberately no settle: the harvest is responsible for this, and
+        // the fixture's tools are not registered yet at this line.
+        const harvested = await adapter.harvest();
+        expect(harvested.status).toBe("ok");
+        if (harvested.status !== "ok") return;
+
+        expect(harvested.value.webmcpRegistriesSeen).toContain("navigator.modelContext");
+        expect(harvested.value.webmcpTools.map((tool) => tool.name).sort()).toEqual(
+          WEBMCP_MAP_TOOLS.map((tool) => tool.name).sort(),
+        );
+      } finally {
+        await adapter.close();
+      }
+    },
+    90_000,
   );
 });

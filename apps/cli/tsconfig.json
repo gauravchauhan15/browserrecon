@@ -26,6 +26,9 @@
       "path": "../../packages/browser/runner"
     },
     {
+      "path": "../../packages/collectors/javascript-discovery"
+    },
+    {
       "path": "../../packages/collectors/network"
     },
     {
