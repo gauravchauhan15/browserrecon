@@ -61,6 +61,17 @@ Read the **effective** budget line. `max_pages` and `timeout_minutes` interact
 with the rate profile, and the tool says which of them actually binds — a page
 budget unreachable at the configured rate is called out explicitly.
 
+The `limits` line also prints the crawl depth, which is not part of that
+arithmetic: depth bounds the crawl's _shape_ rather than its size, and it is
+deliberately not set by the rate profile, so asking to be gentle never
+quietly reshapes the crawl as well as slowing it.
+
+One asymmetry to know before you tune anything. For `--max-pages`, `--rps`,
+`--concurrency` and `--timeout-minutes`, **`0` means "use the rate profile's
+value"** — the profile table stays the single source of truth. For
+`--max-depth`, **`0` means no limit at all**. Same literal, opposite meaning,
+because depth has no profile to fall back to.
+
 Any setting that goes beyond a read-only scan is listed under **higher-risk**
 in plain language. At the defaults there should be none.
 
@@ -95,10 +106,14 @@ tell you precisely which setting changed if you try to resume with a
 different one. The engine behind it lands later, and `--seed-from` is not
 wired either.
 
-Until then, raise the budget and scan again:
+Until then, scan again with the limit that actually stopped it raised. Check
+which one that was before reaching for `--max-pages`: on a real application
+the page budget is rarely what binds first. The coverage table in `report.md`
+names the reason per URL, and `depth_limited` — not `budget_exhausted` — is
+the common one.
 
 ```bash
-node apps/cli/bin/browserrecon.js scan https://your-target.example.com --max-pages 40 --out ~/browserrecon-runs
+node apps/cli/bin/browserrecon.js scan https://your-target.example.com --max-depth 5 --out ~/browserrecon-runs
 ```
 
 Each run gets its own `sess_NNNN` directory, so pointing every scan at the
@@ -118,6 +133,7 @@ Useful additions, depending on the target:
 
 | Flag                                    | When                                                            |
 | --------------------------------------- | --------------------------------------------------------------- |
+| `--max-depth 5`                         | Sections sit further from the seed than the default 3 reaches   |
 | `--allowed-origins a.example,b.example` | The app spans more than one origin you are authorised for       |
 | `--no-headless`                         | The target treats headless Chrome differently                   |
 | `--thoroughness deep`                   | More exploration per page. Does **not** change the request rate |

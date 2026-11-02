@@ -142,9 +142,9 @@ written down in [docs/architecture/](docs/architecture/).
 corepack pnpm verify
 ```
 
-Eight gates: typecheck, typecheck tests, lint, format, test, licenses, schemas,
-and a secret scan of both the working tree and the full history. All eight have
-to pass before anything is pushed.
+Nine gates: typecheck, typecheck tests, lint, format, test, licenses, schemas,
+and a secret scan of the working tree and of the full history — those last two
+are separate gates. All nine have to pass before anything is pushed.
 
 The milestone gates are the interesting part of the suite — they scan real
 fixtures with a real browser and assert the properties each version claims:
