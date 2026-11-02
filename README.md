@@ -1,14 +1,14 @@
 # BrowserRecon
 
-Browser runtime reconnaissance. BrowserRecon drives a real Chrome against a
-live application and turns what it observes into a structured attack-surface
+Browser runtime reconnaissance drives a real Chrome against a
+live application and turns what it observes into an structured agentic attack-surface
 model: the APIs an application actually calls, the workflows those calls form,
-the state the application moves through, and the tools it publishes to AI
+the state the application moves through, and the MCP tools it publishes to AI
 agents.
 
 Local-first. No account, no API key, no cloud service, no telemetry.
 
-> **Status: pre-release.** The deterministic engine (V1–V3) works end to end —
+> **Status:** The deterministic engine (V1–V3) works end to end —
 > `scan` drives a browser, correlates what it sees and writes a report. The AI
 > layers (V4–V6) are not built, and the flags for them do nothing yet. See
 > [Current status](#current-status).
@@ -18,7 +18,7 @@ Local-first. No account, no API key, no cloud service, no telemetry.
 ## Authorized use only
 
 BrowserRecon drives a real browser against a live application and can be given
-credentials. **Only run it against systems you own or have written
+credentials. **For safety purposes, Only run it against systems you own or have written
 authorization to test.** The tool requires an explicit authorization
 acknowledgment before its first scan and records that acknowledgment in the
 scan session.
