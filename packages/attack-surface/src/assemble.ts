@@ -165,8 +165,8 @@ export interface WebMcpToolFound {
    *    as permanently deleting an account, in a column reading "no".
    *
    * The first version collapsed `writes` and `destructive` into one boolean,
-   * which was wrong in the dangerous direction: the reference application publishes
-   * `a navigation helper` with `readOnlyHint: false`, and reporting a
+   * which was wrong in the dangerous direction: the reference application
+   * publishes a navigation helper with `readOnlyHint: false`, and reporting a
    * navigation helper identically to `cancel-order` is a false alarm in a
    * security report — the kind that teaches a reader to discount the real
    * ones.

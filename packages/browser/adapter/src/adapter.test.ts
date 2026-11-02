@@ -577,7 +577,8 @@ describe("a page the browser is still loading", () => {
   browserTest(
     "is kept when the load times out after the document committed",
     async () => {
-      // the reference application did not reach `domcontentloaded` inside the action
+      // The reference application did not reach `domcontentloaded` inside
+      // the action
       // budget. `goto` threw, the navigation was recorded as failed, and the
       // scan reported "no page was loaded" over a log already holding 126
       // requests and 23 parsed bundles — nothing was harvested, so the whole
@@ -666,7 +667,8 @@ describe("a tool registry published late", () => {
     "is waited for, rather than read past",
     async () => {
       // A registry is published by script, and the scripts that publish one
-      // run late: the reference application defined `navigator.modelContext` about nine
+      // run late: the reference application defined `navigator.modelContext`
+      // about nine
       // seconds after navigation and registered its five tools later again.
       // The harvest read the page at `domcontentloaded` and found nothing,
       // which the report printed as "this page published no tools".

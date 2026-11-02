@@ -153,7 +153,8 @@ describe("pacing a page's share of the clock", () => {
   });
 
   it("never offers less than a real application needs to load", async () => {
-    // the reference application took 24.6s to reach domcontentloaded cold and headless.
+    // The reference application took 24.6s to reach domcontentloaded cold
+    // and headless.
     // An allowance below the floor is not a fast scan of a page, it is a
     // scan of a page that has not happened yet.
     const tracker = createBudgetTracker({

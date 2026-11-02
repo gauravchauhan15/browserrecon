@@ -399,8 +399,8 @@ describe("a repeated asset is not a heartbeat", () => {
 
 describe("an endpoint is an endpoint whoever's host it is on", () => {
   it("treats the application's own API gateway as first-party surface", () => {
-    // The case that prompted all of this. the reference application serves its pages from
-    // `the reference application` and its search API from
+    // The case that prompted all of this. The reference application serves
+    // its pages from `example.com` and its search API from
     // `data-search.apigw.example.com` — a different origin, the same
     // operator. Matching on origin alone filed that gateway under the same
     // heading as an ad pixel, and the inventory dropped it: a scan of the

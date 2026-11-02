@@ -121,8 +121,8 @@ async function readHarvest(): Promise<Omit<PageHarvest, "url">> {
    * unobserved as the absent, about the one part of the surface that never
    * appears in traffic and so has nothing else to contradict it.
    *
-   * The numbers below come from measuring the reference application rather than taste —
-   * headless, cold, from the start of navigation:
+   * The numbers below come from measuring the reference application rather
+   * than taste — headless, cold, from the start of navigation:
    *
    *   15.3s  `navigator.modelContext` exists, holding **zero** tools
    *   23.2s  two tools
@@ -699,7 +699,8 @@ export class PuppeteerBrowserAdapter implements BrowserAdapter {
 
       // A navigation that ran out of time with a document already committed
       // is a slow page, not a failed one — and discarding it discards the
-      // whole scan of that page. the reference application took longer than the action
+      // whole scan of that page. The reference application took longer than
+      // the action
       // budget to reach `domcontentloaded`; the browser had the document, was
       // still fetching chunks when the deadline passed, and the run reported
       // "no page was loaded" over a log holding 126 requests and 23 bundles.

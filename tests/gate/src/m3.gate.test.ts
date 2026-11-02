@@ -1074,7 +1074,7 @@ describe("V3: the artifacts say what the model says", () => {
         expect((search?.inputSchema as { properties?: object })?.properties).toBeDefined();
 
         // Every tool is found whether the page wrapped the descriptor under
-        // `item` (a router admin UI) or stored it flat (the reference application, a second WebMCP site). The
+        // `item` (a router admin UI) or stored it flat (the other two). The
         // fixture alternates, so a regression to either shape loses half.
         expect(found.length).toBe(WEBMCP_MAP_TOOLS.length);
 

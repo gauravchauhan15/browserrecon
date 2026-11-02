@@ -522,8 +522,9 @@ export function buildApiModel(
   // exchange to key on: the *request* is the evidence that the application
   // calls an endpoint, and the response only adds a status and a shape.
   //
-  // The cost was exact and reproducible. A scan of the reference application called
-  // `https://data-search.apigw.example.com/v1/suggestions/`, the budget
+  // The cost was exact and reproducible. A scan of the reference application
+  // called `https://data-search.apigw.example.com/v1/suggestions/`, the
+  // budget
   // ended the session before the response landed, and the report's API
   // inventory read `None` — while the log it was derived from held the call.
   //

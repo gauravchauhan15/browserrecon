@@ -6,7 +6,8 @@ import { pageTimings } from "./runner.js";
  *
  * Before this, the two waits were constants: 15s for the document and 2s for
  * the network to go quiet. Both were measurably wrong in both directions —
- * the reference application needed 24.6s to reach `domcontentloaded` cold and headless,
+ * the reference application needed 24.6s to reach `domcontentloaded` cold
+ * and headless,
  * and a static fixture does not need two seconds of silence to prove it is
  * idle — and neither had any relationship to how much time the scan had
  * left.

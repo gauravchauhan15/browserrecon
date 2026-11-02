@@ -57,8 +57,9 @@ const MISLEADING_RATIO = 2;
  * Bounds on a single page's share of the clock (see `pageAllowanceMs`).
  *
  * The floor is what a modern application needs before it has done anything
- * worth reading: the reference application took 24.6s to reach `domcontentloaded` cold and
- * headless, and published its agentic tools at 26s. Below this a page is not
+ * worth reading: the reference application took 24.6s to reach
+ * `domcontentloaded` cold and headless, and published its agentic tools at
+ * 26s. Below this a page is not
  * being scanned quickly, it is being scanned pointlessly.
  *
  * The ceiling stops the division from becoming absurd near the end of a page

@@ -44,7 +44,8 @@ export const ESTIMATED_REQUESTS_PER_PAGE = 50;
  * Two hours rather than one, because the budget that matters for this tool
  * is wall-clock and the thing it is spent on is *pages*. A modern
  * application costs far more per page than a document-and-links crawler
- * assumes — the reference application spent 126 requests on a single page against the 50
+ * assumes — the reference application spent 126 requests on a single page
+ * against the 50
  * this file estimates — so an hour at a polite rate buys a sample, not a
  * crawl, and workflows and interactions are exactly what a sample misses.
  *

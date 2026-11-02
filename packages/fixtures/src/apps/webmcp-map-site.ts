@@ -65,8 +65,8 @@ export const WEBMCP_MAP_TOOLS = [
     annotations: { readOnlyHint: false, destructiveHint: true },
   },
   // `readOnlyHint: false` with no destructive hint. MCP means "may modify
-  // its environment", which covers a navigation helper — observed on
-  // the reference application as `a navigation helper`. Reporting this identically to
+  // its environment", which covers a navigation helper — observed on the
+  // reference application. Reporting this identically to
   // `cancel-order` is the false alarm that teaches a reader to discount the
   // real ones, so the two are kept apart and this fixture proves it.
   {
@@ -98,7 +98,7 @@ function shell(): FixtureResponse {
       // Every registry in this file used to appear in the first tick of the
       // first inline script, so a harvest timed from `domcontentloaded`
       // always won the race and the tests could not tell a scanner that
-      // waits from one that does not. the reference application defines
+      // waits from one that does not. The reference application defines
       // `navigator.modelContext` roughly nine seconds after navigation — a
       // polyfill, loaded as its own script — and registers its five tools
       // later again. The scan read the page long before any of it and
@@ -116,9 +116,9 @@ function shell(): FixtureResponse {
       "    tools: new Map(),",
       "    registrations: new Set(),",
       "  };",
-      // Two shapes in one registry, because three real sites disagreed:
-      // a router admin UI wraps the descriptor under `item` with the schema also as
-      // text; the reference application and a second WebMCP site store it flat with an `outputSchema`
+      // Two shapes in one registry, because three real sites disagreed: a
+      // router's admin UI wraps the descriptor under `item` with the schema
+      // also as text; the other two store it flat with an `outputSchema`
       // beside it. An adapter that handles one and not the other is broken
       // against half the web, so both are registered here and the gate
       // asserts every tool is found.
@@ -143,8 +143,9 @@ function shell(): FixtureResponse {
       "    );",
       "  };",
       "  navigator.modelContext.getTools = function () { return this.tools; };",
-      // In two batches with a gap, because that is how it happens. On
-      // the reference application the registry existed and held nothing for 7.9 seconds,
+      // In two batches with a gap, because that is how it happens. In the
+      // reference application the registry existed and held nothing for 7.9
+      // seconds,
       // then two tools appeared, then the other three 2.8 seconds later. A
       // wait that stops as soon as the count pauses harvested two of the
       // five and said nothing about the rest; one batch here could not have

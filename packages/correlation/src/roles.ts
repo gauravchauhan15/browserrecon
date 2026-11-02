@@ -214,8 +214,9 @@ function registrableDomain(host: string): string {
  * Whether a host is the application's own, one subdomain over.
  *
  * An application's API almost never lives on the origin its pages are served
- * from. the reference application serves its pages from `the reference application` and its search API
- * from `data-search.apigw.example.com`; matching on origin alone filed that
+ * from. The reference application serves its pages from `example.com` and
+ * its search API from `data-search.apigw.example.com`; matching on origin
+ * alone filed that
  * gateway as somebody else's property and dropped it from the inventory —
  * which is to say the scan found the API surface and then discarded it.
  *

@@ -133,7 +133,8 @@ export interface PageHarvest {
   /**
    * The wait for the registry ended on its budget, not on the tools settling.
    *
-   * Tools register in a trickle — the reference application's five arrived across eleven
+   * Tools register in a trickle — the reference application's five arrived
+   * across eleven
    * seconds — so a wait that runs out may have caught some and missed the
    * rest. A truncated list that reads as complete is the same failure as an
    * empty one that reads as complete, so the caller is told which it has.

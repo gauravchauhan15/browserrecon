@@ -115,7 +115,8 @@ const INTERACTION_SETTLE_MS = 1_000;
  * has left — and these decide what it buys. Before this, the two waits were
  * fixed at 15s for the document and 2s for the network to go quiet, which
  * had no relationship to the budget and were measurably wrong in both
- * directions: the reference application needed 24.6s to reach `domcontentloaded` cold, and
+ * directions: the reference application needed 24.6s to reach
+ * `domcontentloaded` cold, and
  * a static fixture does not need two seconds of silence to prove it is idle.
  *
  * The shares do not add to 1. What is left over pays for the harvest, the
@@ -491,7 +492,8 @@ export function createRunner(options: RunnerOptions): Runner {
 
       // The same rule one step along: a list cut off by the budget reads
       // exactly like a complete one, so the only thing separating them is
-      // this line. the reference application registered its five tools across eleven
+      // this line. The reference application registered its five tools
+      // across eleven
       // seconds, and an earlier wait returned two of them with nothing said.
       if (page.webmcpStillFilling) {
         log.warn("tools were still being registered when the wait ran out", {

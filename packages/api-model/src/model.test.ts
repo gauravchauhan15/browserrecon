@@ -246,8 +246,9 @@ describe("a request the scan never saw answered", () => {
     // response, so a call whose answer had not arrived when the budget ran
     // out vanished — counted in `unanswered` and listed nowhere.
     //
-    // Exactly how a real scan of the reference application reported an API inventory of
-    // `None`: it called `data-search.apigw.example.com/v1/suggestions/`,
+    // Exactly how a real scan of the reference application reported an API
+    // inventory of `None`: it called
+    // `data-search.apigw.example.com/v1/suggestions/`,
     // the session ended before the response landed, and the one endpoint in
     // the log did not reach the report derived from it.
     const model = build([unanswered(`${ORIGIN}/api/suggestions`)]);

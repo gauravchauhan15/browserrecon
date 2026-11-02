@@ -7,7 +7,8 @@
  * `@browserrecon/collector-javascript-discovery` has had a tree-sitter
  * analyzer, a triage ranking, a bounded pipeline and a static↔runtime
  * reconciler since M2, with tests for each. Nothing imported any of it. A
- * scan of the reference application captured 110 first-party bundles, reported them all as
+ * scan of the reference application captured 110 first-party bundles,
+ * reported them all as
  * `body captured`, and listed one static API candidate — which was not a
  * candidate at all but a page the budget had cut off, borrowed from the
  * queue's skip list to fill the column.

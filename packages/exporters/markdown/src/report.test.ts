@@ -374,8 +374,9 @@ describe("the agentic-tool diagram", () => {
 
   it("does not claim a page published nothing when no page was read", () => {
     // A registry never appears in traffic, so the only evidence that a page
-    // publishes no tools is a page that was read. A scan of the reference application
-    // whose browsing phase failed outright printed "this page published no
+    // publishes no tools is a page that was read. A scan of the reference
+    // application whose browsing phase failed outright printed "this page
+    // published no
     // tools to visiting agents" — about a site publishing five. Reporting
     // the unobserved as the absent, in the one section where nothing else
     // in the log could contradict it.

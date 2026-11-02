@@ -4,6 +4,22 @@ Recorded per dev plan `BR-M0-15`. Section references (`§`) point into the build
 plan. These are settled; changing one is a deliberate act that updates this
 file and states what reversed it.
 
+## "The reference application"
+
+Several decisions here, and the comments in the source that point back at
+them, cite measurements from **the reference application**: a large
+production single-page application, measured headless and cold in October
+2026 — 24.6s to `domcontentloaded`, 126 requests for one page, 110 first-party
+bundles, a WebMCP registry appearing at 15.3s and filling to five tools by
+26s.
+
+It is deliberately unnamed. The measurements are what the decisions rest on;
+the operator's identity adds nothing a reader of this file needs, and naming
+a third party as a test subject is not ours to do. Every number is
+reproducible against any application of comparable weight, which is the only
+property that matters here. Hosts in examples are `example.com` throughout
+and are illustrative, not observed.
+
 ## Language and toolchain
 
 | Decision      | Choice                                                               | Why                                                                                                               |
@@ -416,7 +432,7 @@ a minified bundle gets.
 The detection rules were not the first problem. §22.2 externalizes an
 oversized payload to a content-addressed file, and it moves the **whole**
 payload, not just its body. So eight events — the eight largest responses of
-the scan, `the main entry bundle` among them — reached every consumer as
+the scan, the main entry bundle among them — reached every consumer as
 `{$external, hash, bytes}`: no url, no mime type, no body. The static pass
 read 113 small chunks and none of the files the application actually lives in,
 and the API model never saw those responses either.
@@ -523,7 +539,8 @@ times out before committing leaves the previous page in the tab, and
 accepting that would file one page's links, forms and tools under another's.
 
 **The registry was read too early.** A tool registry is published by script,
-and the scripts that publish one run late. Measured on the reference application, headless and
+and the scripts that publish one run late. Measured on the reference
+application, headless and
 cold, from the start of navigation:
 
 | time  | state                                                   |
@@ -591,7 +608,8 @@ less, instead of spending at a rate it can no longer afford and being cut
 off with its queue half-read. The clock is a cap and never a target — a
 queue that empties in ten minutes finishes in ten minutes.
 
-Both ends are clamped. The floor is 20s per page because the reference application needed 24.6s
+Both ends are clamped. The floor is 20s per page because the reference
+application needed 24.6s
 to load and published its agentic tools at 26s; below that a page is not
 being scanned quickly, it is being scanned pointlessly. The ceiling stops the
 division from handing the last page of a budget the rest of the afternoon.
@@ -600,7 +618,8 @@ put it: Playwright defaults to 30s, Katana to 10s.
 
 Two hours rather than one because the thing being bought is pages, and a
 modern application costs far more per page than this file's estimate of 50
-requests — the reference application spent 126 on one. An hour at a polite rate buys a sample,
+requests — the reference application spent 126 on one. An hour at a polite
+rate buys a sample,
 and workflows and interactions are exactly what a sample misses.
 
 ### Depth was tracked for ordering and never used as a limit

@@ -1317,8 +1317,9 @@ function withModelContext(
  * Whose host an endpoint is on.
  *
  * Three answers rather than two, because the two-answer version was wrong
- * about the case that matters most. the reference application serves its pages from
- * `the reference application` and its search API from `data-search.apigw.example.com`;
+ * about the case that matters most. The reference application serves its
+ * pages from `example.com` and its search API from
+ * `data-search.apigw.example.com`;
  * "not the target origin" filed the application's own API gateway under the
  * same heading as a Google ad pixel, and the inventory dropped it.
  *

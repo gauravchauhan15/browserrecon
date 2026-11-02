@@ -55,8 +55,9 @@ export interface ReadOptions {
    * On for anything that analyses payloads. §22.2 externalizes the *whole*
    * payload, not just its body — so an event over the threshold reaches a
    * consumer with no url, no mime type and no body, and silently contributes
-   * nothing. A scan of the reference application externalized its eight largest responses,
-   * `the main entry bundle` among them, and the static pass read the 113 small
+   * nothing. A scan of the reference application externalized its eight
+   * largest responses, the main entry bundle among them, and the static pass
+   * read the 113 small
    * chunks and none of the bundles the application actually lives in.
    */
   readonly resolveExternal?: boolean | undefined;

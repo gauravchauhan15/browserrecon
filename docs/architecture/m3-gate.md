@@ -325,7 +325,7 @@ live scan anywhere.
 
 ## What the first real target changed
 
-Gate A against `the reference application` produced a report whose API inventory read
+Gate A against the reference application produced a report whose API inventory read
 **None** beside a coverage score of 0.95, and the log it was built from held
 the endpoints. Four fixes followed, each written up in
 [decisions.md](decisions.md):
